@@ -4,6 +4,7 @@ import urllib2
 from collections import defaultdict
 
 from base import AbstractStore
+from compressed import CompressedHandler
 
 
 class IndexedStore(AbstractStore):
@@ -85,6 +86,9 @@ class RemoteHTTPIndexedStore(IndexedStore):
 
     def __init__(self, url):
         self.root = url
+        self.opener = urllib2.build_opener(CompressedHandler,
+                                           urllib2.HTTPHandler,
+                                           urllib2.HTTPSHandler)
 
     def info(self):
         return dict(root=self.root)
@@ -108,7 +112,7 @@ class RemoteHTTPIndexedStore(IndexedStore):
             request = urllib2.Request(url)
         request.add_header('User-Agent', 'enstaller')
         try:
-            return urllib2.urlopen(request)
+            return self.opener.open(request)
         except urllib2.HTTPError as e:
             raise KeyError("%s: %s" % (e, url))
         except urllib2.URLError as e:
