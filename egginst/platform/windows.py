@@ -139,3 +139,9 @@ def get_executable(gui=False):
     else:
         return os.path.join(exec_dir, 'python.exe')
     
+
+def fix_object_code(path, targets):
+    """ Does nothing on windows
+    
+    """
+    pass

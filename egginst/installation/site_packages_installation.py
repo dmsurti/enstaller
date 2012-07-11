@@ -75,7 +75,7 @@ class SitePackagesInstallation(AbstractInstallation):
     """
     
     def __init__(self, path=sys.prefix, platform=None, interpreter=None):
-        self.path = path
+        self.path = os.path.abspath(path)
         if platform is None:
             from ..platform import get_platform
             platform = get_platform()
@@ -133,6 +133,15 @@ class SitePackagesInstallation(AbstractInstallation):
             files_written += self.platform.link_executable(self.path, dest_path,
                 target, self.interpreter)
         return files_written
+        
+    def patch_object_code(self, bundle, metadata, files):
+        """ Patch object code to replace placeholder paths
+        
+        """
+        targets = [os.path.join(self.path, path)
+            for path in metadata.get_library_dirs(bundle)]
+        for path in files:
+            self.platform.fix_object_code(os.path.join(self.path, *path), targets)
 
     def install_scripts(self, package, metadata):
         """ Install all entry point scripts

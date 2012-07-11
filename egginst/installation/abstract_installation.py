@@ -19,6 +19,7 @@ class AbstractInstallation(object):
         files = self.write_files(bundle, metadata)
         files += self.install_executables(bundle, metadata)
         files += self.install_scripts(bundle, metadata)
+        self.patch_object_code(bundle, metadata, files)
         self.install_app(metadata)
         self.post_install(metadata)
         # last action is to write metadata - failure before this point means a
@@ -69,6 +70,12 @@ class AbstractInstallation(object):
         
     def install_executables(self, bundle, metadata):
         """ Install executable files in locations as directed by metadata
+        
+        """
+        raise NotImplementedError    
+        
+    def patch_object_code(self, metadata, files):
+        """ Patch object code to replace placeholder paths
         
         """
         raise NotImplementedError    

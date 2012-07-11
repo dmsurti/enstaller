@@ -65,3 +65,49 @@ def get_executable(gui=False):
     import sys
     return sys.executable
 
+def fix_object_code(path, targets):
+    # XXX probably should bring this into this module
+    from egginst.object_code import get_object_type, macho_add_rpaths_to_file, \
+        placehold_pat, alt_replace_func
+    
+    tp = get_object_type(path)
+    if tp is None:
+        return
+    if tp.startswith('MachO-'):
+        # Use MachO-specific routines.
+        rpaths = list(targets)
+        macho_add_rpaths_to_file(path, rpaths)
+        return
+
+    f = open(path, 'r+b')
+    data = f.read()
+    matches = list(placehold_pat.finditer(data))
+    if not matches:
+        f.close()
+        return
+
+    #if verbose:
+    #    print "Fixing placeholders in:", path
+    for m in matches:
+        rest = m.group(1)
+        while rest.startswith('/PLACEHOLD'):
+            rest = rest[10:]
+
+        assert rest == '' or rest.startswith(':')
+        rpaths = list(targets)
+        # extend the list with rpath which were already in the binary,
+        # if any
+        rpaths.extend(p for p in rest.split(':') if p)
+        r = ':'.join(rpaths)
+
+        if alt_replace_func is not None:
+            r = alt_replace_func(r)
+
+        padding = len(m.group(0)) - len(r)
+        if padding < 1: # we need at least one null-character
+            raise Exception("placeholder %r too short" % m.group(0))
+        r += padding * '\0'
+        assert m.start() + len(r) == m.end()
+        f.seek(m.start())
+        f.write(r)
+    f.close()
