@@ -6,25 +6,35 @@
 # LICENSE.txt
 #
 
+from encore.events.api import ProgressManager
+
 
 class AbstractInstallation(object):
     
     # public API
 
-    def install(self, bundle, metadata, extra_info=None):
+    def install(self, bundle, metadata, extra_info=None, progress=None):
         """ Install a package into this installation
         
         """
-        self.remove_old(metadata)
-        files = self.write_files(bundle, metadata)
-        files += self.install_executables(bundle, metadata)
-        files += self.install_scripts(bundle, metadata)
-        self.patch_object_code(bundle, metadata, files)
-        self.install_app(metadata)
-        self.post_install(metadata)
-        # last action is to write metadata - failure before this point means a
-        # bad install
-        self.write_metadata(bundle, metadata, files)
+        install_progress = ProgressManager(
+            message="installing egg",
+            steps=bundle.installed_size,
+            progress_type="installing",
+            super_id=progress.id if progress is not None else None
+        )
+        
+        with install_progress:
+            self.remove_old(metadata)
+            files = self.write_files(bundle, metadata, install_progress)
+            files += self.install_executables(bundle, metadata, install_progress)
+            files += self.install_scripts(bundle, metadata, install_progress)
+            self.patch_object_code(bundle, metadata, files, install_progress)
+            self.install_app(metadata, install_progress)
+            self.post_install(metadata, install_progress)
+            # last action is to write metadata - failure before this point means a
+            # bad install
+            self.write_metadata(bundle, metadata, files, install_progress)
 
     
     def uninstall(self, egg_name):
@@ -60,7 +70,7 @@ class AbstractInstallation(object):
         """
         raise NotImplementedError
     
-    def write_files(self, package, metadata):
+    def write_files(self, package, metadata, progress):
         """ Write all the files from the package into the correct locations
         
         This should also ensure that permissions are correct, if not otherwise
@@ -75,37 +85,37 @@ class AbstractInstallation(object):
         """
         raise NotImplementedError
         
-    def install_executables(self, bundle, metadata):
+    def install_executables(self, bundle, metadata, progress):
         """ Install executable files in locations as directed by metadata
         
         """
         raise NotImplementedError    
         
-    def patch_object_code(self, metadata, files):
+    def patch_object_code(self, metadata, files, progress):
         """ Patch object code to replace placeholder paths
         
         """
         raise NotImplementedError    
     
-    def install_scripts(self, metadata):
+    def install_scripts(self, metadata, progress):
         """ Ensure that script entry-points work
         
         """
         raise NotImplementedError    
     
-    def install_app(self, metadata):
+    def install_app(self, metadata, progress):
         """ Call out to appinst to install any applications that may exist
         
         """
         raise NotImplementedError    
             
-    def post_install(self, metadata):
+    def post_install(self, metadata, progress):
         """ Run post_install.py, if it exists
         
         """
         raise NotImplementedError    
     
-    def write_metadata(self, bundle, metadata, files):
+    def write_metadata(self, bundle, metadata, files, progress):
         """ Assuming all else works, finalize the installation
         
         The command which performs the finalization should be atomic.  Until it

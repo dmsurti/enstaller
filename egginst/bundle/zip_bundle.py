@@ -48,3 +48,6 @@ class ZipBundle(AbstractBundle):
     
     def get_bytes(self, path):
         return self._archive.read('/'.join(path))
+
+    def get_size(self, path):
+        return self._archive.getinfo('/'.join(path)).file_size

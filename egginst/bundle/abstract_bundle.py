@@ -35,4 +35,7 @@ class AbstractBundle(object):
     def get_bytes(self, path):
         with self.open(path) as data:
             return data.read()
+    
+    def get_size(self, path):
+        return len(self.get_bytes(path))
 

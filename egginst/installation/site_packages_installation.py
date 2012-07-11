@@ -15,6 +15,8 @@ import cStringIO
 import time
 import logging
 
+from encore.events.api import ProgressManager
+
 from .abstract_installation import AbstractInstallation
 
 # set up logger
@@ -115,17 +117,29 @@ class SitePackagesInstallation(AbstractInstallation):
             for path in metadata['files']]
         dirs = set(tuple(path.split('/')[1:-1]) for path in metadata['files'])
         
-        self.uninstall_app(cname)
-        for file in files:
-            self._remove(file)
-            if file.endswith('.py'):
-                self._remove(file+'c')
-                self._remove(file+'o')
-        
-        for dir in dirs:
-            self._remove_empty(dir)
-        
-        self._remove_empty(self.egginfo_path)
+        progress = ProgressManager(
+            message="uninstalling egg",
+            steps=len(files) + len(dirs),
+            progress_type="uninstalling",
+        )
+        completion = 0
+
+        with progress:
+            self.uninstall_app(cname)
+            for file in files:
+                self._remove(file)
+                if file.endswith('.py'):
+                    self._remove(file+'c')
+                    self._remove(file+'o')
+                completion += 1
+                progress(step=completion)
+            
+            for dir in dirs:
+                self._remove_empty(dir)
+                completion += 1
+                progress(step=completion)
+            
+            self._remove_empty(self.egginfo_path)
     
     def get_installed(self):
         """ Return an iterator of all installed packages
@@ -160,13 +174,15 @@ class SitePackagesInstallation(AbstractInstallation):
                 % (metadata.cname, self.path))
             self._remove(meta_json)
     
-    def write_files(self, package, metadata):
+    def write_files(self, package, metadata, progress):
         """ Write all files in the package to the installation
         
         """
         logger.info('Writing files for "%s" to installation at "%s"'
             % (metadata.egg_name, self.path))
         files_written = []
+        
+        completion = 0
         for path in package:
             if self.skip_file(package, path):
                 logger.debug("skipping '%s'" % '/'.join(path))
@@ -180,10 +196,13 @@ class SitePackagesInstallation(AbstractInstallation):
             if metadata.is_executable(path):
                 logger.debug('chmod %s 0755' % '/'.join(dest_path))
                 os.chmod(os.path.join(self.path, *dest_path), 0755)
+            
+            completion += package.get_size(path)
+            progress(step=completion)
         
         return files_written
     
-    def install_executables(self, bundle, metadata):
+    def install_executables(self, bundle, metadata, progress):
         """ Install executable files in locations as directed by metadata
         
         """
@@ -196,7 +215,7 @@ class SitePackagesInstallation(AbstractInstallation):
                 target, self.interpreter)
         return files_written
         
-    def patch_object_code(self, bundle, metadata, files):
+    def patch_object_code(self, bundle, metadata, files, progress):
         """ Patch object code to replace placeholder paths
         
         """
@@ -207,7 +226,7 @@ class SitePackagesInstallation(AbstractInstallation):
         for path in files:
             self.platform.fix_object_code(os.path.join(self.path, *path), targets)
 
-    def install_scripts(self, package, metadata):
+    def install_scripts(self, package, metadata, progress):
         """ Install all entry point scripts
         
         """
@@ -225,7 +244,7 @@ class SitePackagesInstallation(AbstractInstallation):
                 files_written += self.platform.script_extras(bin_dir, name, script_type)
         return files_written
     
-    def install_app(self, metadata):
+    def install_app(self, metadata, progress):
         """ Run appinst to do additional installation for the package
         
         """
@@ -247,7 +266,7 @@ class SitePackagesInstallation(AbstractInstallation):
                 logger.exception(exc)
                 # XXX should we perhaps just fail here?
     
-    def uninstall_app(self, cname):
+    def uninstall_app(self, cname, progress):
         """ Run appinst to do additional uninstallation for the package
         
         """
@@ -269,7 +288,7 @@ class SitePackagesInstallation(AbstractInstallation):
                 logger.exception(exc)
                 # XXX should we perhaps just fail here?
     
-    def write_metadata(self, bundle, metadata, files):
+    def write_metadata(self, bundle, metadata, files, progress):
         """ Write out installation metadata
         
         This is used by tools that gather information about the state of the
@@ -320,7 +339,7 @@ class SitePackagesInstallation(AbstractInstallation):
         logger.debug('no metadata for "%s"' % cname)
         return None
 
-    def post_install(self, metadata):
+    def post_install(self, metadata, progress):
         rel_path = self.egginfo_path + (metadata.cname, 'post_egginst.py')
         path = os.path.join(self.path, *rel_path)
         if os.path.exists(path):
