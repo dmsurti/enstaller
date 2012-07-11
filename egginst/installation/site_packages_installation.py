@@ -291,6 +291,7 @@ class SitePackagesInstallation(AbstractInstallation):
         info = metadata.get_metadata(bundle)
         info['ctime'] = time.ctime() #FIXME: timestamps should be UTC!
         info['hook'] = False
+        info['type'] = 'egg'
         with open(meta_info, 'wb') as f:
             json.dump(info, f, indent=2, sort_keys=True)
         
