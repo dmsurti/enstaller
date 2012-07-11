@@ -29,13 +29,13 @@ entry_point_template = '''\
 #!%(executable)s
 # This script was created by egginst when installing:
 #
-#   %(egg_name)s
+#   %(egg_name)s.egg
 #
 if __name__ == '__main__':
     import sys
-    from %(module)s import %(attrs)s
+    from %(module)s import %(importable)s
 
-    sys.exit(%(attrs)s())
+    sys.exit(%(callable)s())
 '''
 
 class SitePackagesInstallation(AbstractInstallation):
@@ -74,20 +74,29 @@ class SitePackagesInstallation(AbstractInstallation):
     
     """
     
-    def __init__(self, path=sys.prefix, platform=None, interpreter=None):
+    def __init__(self, path=sys.prefix, platform=None, interpreters=None):
         self.path = os.path.abspath(path)
         if platform is None:
             from ..platform import get_platform
             platform = get_platform()
         self.platform = platform
         
-        if interpreter is None:
-            pass
+        if interpreters is None:
+            interpreters = {
+                'console_scripts': self.platform.get_interpreter(),
+                'gui_scripts': self.platform.get_interpreter(gui=True)
+            }
+        elif isinstance(interpreters, basestring):
+            interpreters = {
+                'console_scripts': interpreters,
+                'gui_scripts': interpreters
+            }
+        self.interpreters = interpreters
         
         # sub-path tuples
         self.py_path = self.platform.rel_site_packages
         self.egginfo_path = ('EGG-INFO',)
-        self.bin_dir = (self.platform.bin_dir_name,)
+        self.bin_dir = self.platform.bin_dir
 
     # implementation API
     
@@ -130,6 +139,7 @@ class SitePackagesInstallation(AbstractInstallation):
         files_written = []
         for path, target in metadata.get_executables(bundle):
             dest_path = self.get_dest_path(path, metadata)
+            print '---->', dest_path, target
             files_written += self.platform.link_executable(self.path, dest_path,
                 target, self.interpreter)
         return files_written
@@ -147,13 +157,16 @@ class SitePackagesInstallation(AbstractInstallation):
         """ Install all entry point scripts
         
         """
+        bin_dir = os.path.join(self.path, *self.bin_dir)
         files_written = []
         for script_type, scripts in metadata.get_scripts(package).items():
             for name, entry_point in scripts.items():
+                if not os.path.exists(bin_dir):
+                    os.makedirs(bin_dir)
                 fname = self.platform.script_name(name, script_type)
-                self.write_script(fname, metadata.egg_name, script_type)
-                files_written.append(fname)
-                files_written += self.platform.script_extras(name, script_type)
+                self.write_script(bin_dir, fname, metadata.egg_name, script_type, entry_point)
+                files_written.append(self.bin_dir + (fname,))
+                files_written += self.platform.script_extras(bin_dir, name, script_type)
         return files_written
     
     def install_app(self, metadata):
@@ -244,7 +257,6 @@ class SitePackagesInstallation(AbstractInstallation):
             classification = 'default'
             result = path
         
-        print destinations[classification], result
         return classification, destinations[classification] + result
     
     
@@ -303,14 +315,18 @@ class SitePackagesInstallation(AbstractInstallation):
         finally:
             data.close()
             
-    def write_script(self, fname, egg_name, entry_point):
+    def write_script(self, path, fname, egg_name, script_type, entry_point):
+        print fname, egg_name, script_type, entry_point['attrs']
         script = entry_point_template % dict(
             egg_name=egg_name,
             module=entry_point['module'],
-            importable=entry_point['attr'].split('.')[0],
-            callable=entry_point['attr'],
-            executable=self.executable,
+            importable=entry_point['attrs'].split('.')[0],
+            callable=entry_point['attrs'],
+            executable=self.interpreters[script_type],
         )
+        with open(os.path.join(path, fname), 'w') as fp:
+            fp.write(script)
+        os.chmod(path, 0755)
         
     def run(self, path):
         if not os.path.isfile(path):

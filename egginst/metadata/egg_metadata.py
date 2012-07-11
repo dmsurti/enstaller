@@ -23,7 +23,7 @@ def is_namespace(data):
     return namespace_package_pat.match(data) is not None
 
 entry_point_section_pat = re.compile('^\[(?P<section>[^\]]*)\]$')
-entry_point_pat = re.compile(r'(?P<name>\w+)\s*=\s*(?P<module>(\w|\.)+)'+
+entry_point_pat = re.compile(r'(?P<name>\S+)\s*=\s*(?P<module>(\w|\.)+)'+
     '(:(?P<attrs>(\w|\.)+)(\s+\[(?P<extras>[^\]]*)\])?)?')
     
 class EggMetadata(AbstractMetadata):
@@ -169,13 +169,16 @@ class EggMetadata(AbstractMetadata):
         sections = {}
         section = None
         for line in data.splitlines():
+            print "'%s': " % line,
             text = line.strip()
             if text == '' or text.startswith('#'):
+                print 'skip'
                 continue
             m = entry_point_section_pat.match(text)
             if m is not None:
                 section = m.groupdict()['section']
                 sections.setdefault(section, {})
+                print 'section', section
                 continue
             
             if section is not None:
@@ -184,8 +187,10 @@ class EggMetadata(AbstractMetadata):
                     d = m.groupdict()
                     name = d.pop('name')
                     sections[section][name] = d
+                    print 'name', name, 'data', d
                 else:
                     # XXX bad entry point file - should at least log
+                    print 'bad'
                     pass
         
         return sections

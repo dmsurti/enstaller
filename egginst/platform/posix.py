@@ -12,7 +12,7 @@ name = 'posix'
 
 is_win = False
 
-bin_dir_name = 'bin'
+bin_dir = ('bin',)
 
 # XXX this will cause problems if we ever are installing into a different
 # Python's site packages...
@@ -49,6 +49,9 @@ def link_executable(base_path, src, target):
     os.symlink(target, src_path)
     return [target]
 
+def script_name(name, script_type):
+    return name
+
 def script_extras(path, name, script_type):
     """ Not used on posix
     
@@ -56,13 +59,12 @@ def script_extras(path, name, script_type):
     return []
     
 
-def get_executable(gui=False):
+def get_interpreter(gui=False):
     """ Return the python executable
     
     The gui argument is ignored on posix systems.
     
     """
-    import sys
     return sys.executable
 
 def fix_object_code(path, targets):

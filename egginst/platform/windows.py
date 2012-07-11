@@ -10,7 +10,7 @@ name = 'windows'
 
 is_win = True
 
-bin_dir_name = 'Scripts'
+bin_dir = ('Scripts',)
 
 rel_site_packages = ('Lib', 'site-packages')
 
@@ -87,6 +87,14 @@ sys.exit(subprocess.call([src] + sys.argv[1:]))
         with open(target, 'wb') as fp:
             fp.write(data)        
         return [target]
+
+
+def script_name(name, script_type):
+    if script_type == 'gui_script':
+        return name+'-script.pyw'
+    else:
+        return name+'-script.py'
+    
 
 def script_extras(path, name, script_type):
     """ Create appropriate .exe files to wrap a script.
