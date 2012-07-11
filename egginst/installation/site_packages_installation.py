@@ -12,6 +12,7 @@ import re
 import errno
 import json
 import cStringIO
+import time
 import logging
 
 from .abstract_installation import AbstractInstallation
@@ -103,6 +104,45 @@ class SitePackagesInstallation(AbstractInstallation):
         
         logger.debug('New SitePackagesInstallation() object for "%s" % self.path')
 
+    # Public API
+        
+    def uninstall(self, cname):
+        """ Remove a package from this installation
+        
+        """
+        metadata = self.read_meta(cname)
+        files = [os.path.join(self.path, *path.split('/')[1:])
+            for path in metadata['files']]
+        dirs = set(tuple(path.split('/')[1:-1]) for path in metadata['files'])
+        
+        self.uninstall_app(cname)
+        for file in files:
+            self._remove(file)
+            if file.endswith('.py'):
+                self._remove(file+'c')
+                self._remove(file+'o')
+        
+        for dir in dirs:
+            self._remove_empty(dir)
+        
+        self._remove_empty(self.egginfo_path)
+    
+    def get_installed(self):
+        """ Return an iterator of all installed packages
+        
+        """
+        egg_info_dir = os.path.join(self.path, *self.egginfo_path)
+        if not os.path.isdir(egg_info_dir):
+            return
+        pat = re.compile(r'([a-z0-9_.]+)$')
+        for cname in sorted(os.listdir(egg_info_dir)):
+            if not pat.match(cname):
+                continue
+            d = self.read_meta(cname)
+            if d is None:
+                continue
+            yield d['egg_name']
+
     # implementation API
     
     def remove_old(self, metadata):
@@ -186,6 +226,9 @@ class SitePackagesInstallation(AbstractInstallation):
         return files_written
     
     def install_app(self, metadata):
+        """ Run appinst to do additional installation for the package
+        
+        """
         rel_path = self.egginfo_path + (metadata.cname, 'inst', 'appinst.dat')
         path = os.path.join(self.path, *rel_path)
         if os.path.isfile(path):
@@ -204,20 +247,27 @@ class SitePackagesInstallation(AbstractInstallation):
                 logger.exception(exc)
                 # XXX should we perhaps just fail here?
     
-    def uninstall_app(self, metadata):
-        path = os.path.join(self.egginfo_path, metadata.cname, 'inst',
+    def uninstall_app(self, cname):
+        """ Run appinst to do additional uninstallation for the package
+        
+        """
+        path = os.path.join(self.egginfo_path, cname, 'inst',
             'appinst.dat')
         if sys.path.isfile(path):
             logger.info('Uninstalling apps for "%s" in installation at "%s"'
-                % (metadata.egg_name, self.path))
+                % (cname, self.path))
             try:
                 import appinst
-                appinst.uninstall_from_dat(path)
             except ImportError:
-                return
+                logger.error('Could not import appinst, skipping')
+
+            try:
+                appinst.uninstall_from_dat(path)
             except Exception as exc:
-                # XXX should log properly
-                print 'Error uninstalling app:', exc
+                logger.error('Error installing app for "%s" in installation at "%s"'
+                    % (cname, self.path))
+                logger.exception(exc)
+                # XXX should we perhaps just fail here?
     
     def write_metadata(self, bundle, metadata, files):
         """ Write out installation metadata
@@ -239,6 +289,8 @@ class SitePackagesInstallation(AbstractInstallation):
         # XXX why do we have 2 different metadata files?
         meta_info = os.path.join(meta_dir, '_info.json')
         info = metadata.get_metadata(bundle)
+        info['ctime'] = time.ctime() #FIXME: timestamps should be UTC!
+        info['hook'] = False
         with open(meta_info, 'wb') as f:
             json.dump(info, f, indent=2, sort_keys=True)
         
@@ -251,9 +303,21 @@ class SitePackagesInstallation(AbstractInstallation):
                 [os.path.join('.', *meta_json)]
         }
         with open(os.path.join(self.path, *meta_json), 'wb') as f:
-            json.dump(meta, f, indent=2, sort_keys=True)
+            json.dump(meta, f, indent=2, sort_keys=True)        
         
+    def read_meta(self, cname):
+        """ Read the metadata for the package defined by cname
         
+        If it does not exist, return None
+        
+        """
+        egg_info_dir = os.path.join(self.path, *self.egginfo_path)
+        meta_json = os.path.join(egg_info_dir, cname, 'egginst.json')
+        if os.path.isfile(meta_json):
+            logger.debug('reading metadata at "%s"' % meta_json)
+            return json.load(open(meta_json))
+        logger.debug('no metadata for "%s"' % cname)
+        return None
 
     def post_install(self, metadata):
         rel_path = self.egginfo_path + (metadata.cname, 'post_egginst.py')
@@ -266,6 +330,9 @@ class SitePackagesInstallation(AbstractInstallation):
     # private API 
             
     def get_dest_path(self, path, metadata):
+        """ Get the appropriate path for this file.
+        
+        """
         destinations = {
             'pkg_info': self.py_path,
             'prefix': (),
@@ -312,7 +379,9 @@ class SitePackagesInstallation(AbstractInstallation):
 
 
     def write_file(self, package, path, dest_path):
+        """ Write the data from a bundle entry into a file
         
+        """
         actual_path = os.path.join(self.path, *dest_path)
         # remove contents if __init__.py is a namespace package
         if path[-1] == '__init__.py' and is_namespace(package.get_bytes(path)):
@@ -348,7 +417,9 @@ class SitePackagesInstallation(AbstractInstallation):
             data.close()
             
     def write_script(self, path, fname, egg_name, script_type, entry_point):
-        print fname, egg_name, script_type, entry_point['attrs']
+        """ Write an entry point script to the specified path
+        
+        """
         script = entry_point_template % dict(
             egg_name=egg_name,
             module=entry_point['module'],
@@ -362,10 +433,15 @@ class SitePackagesInstallation(AbstractInstallation):
         os.chmod(path, 0755)
         
     def run(self, path):
+        """ Run the script at the path
+        
+        """
         if not os.path.isfile(path):
             return
         from subprocess import call
         logger.debug("running '%s'" % path)
+        # XXX should we run this with self.interpreters['console_script'] instead?
+        # XXX should we capture stdout/stderr?
         call([sys.executable, '-E', path, '--prefix', self.prefix],
              cwd=os.path.dirname(path))
     
@@ -405,3 +481,16 @@ class SitePackagesInstallation(AbstractInstallation):
         from ..platform import get_platform
         platform = get_platform()
         platform.remove_file(path)
+    
+    def _remove_empty(self, directory):
+        """ Remove a directory if it is empty
+        
+        """
+        try:
+            logger.debug("attempting to remove directory '%s'" % directory)
+            os.rmdir(directory)
+        except OSError as exc: # directory might not exist or not be empty
+            logger.info("directory '%s' not empty or otherwise unable to remove:"
+                % directory)
+            logger.info(exc)
+            pass

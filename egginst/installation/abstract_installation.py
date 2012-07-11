@@ -31,7 +31,14 @@ class AbstractInstallation(object):
         """ Remove a package from this installation
         
         """
-        pass
+        raise NotImplementedError
+    
+    def get_installed(self):
+        """ Return a list of all installed packages
+        
+        """
+        raise NotImplementedError
+        
     
     # implementation API
     
