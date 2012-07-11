@@ -7,6 +7,10 @@
 #
 
 import sys
+import logging
+
+# set up logger
+logger = logging.getLogger(__name__)
 
 name = 'posix'
 
@@ -25,6 +29,7 @@ def remove_file(path):
     
     """
     import os
+    logging.debug("removing '%s'" % path)
     if os.path.isdir(path):
         import shutil
         shutil.rmtree(path)
@@ -40,12 +45,14 @@ def link_executable(base_path, src, target):
         return []
     
     if not os.path.isdir(os.path.dirname(target)):
+        logging.debug("creating directory '%s'" % os.path.dirname(target))
         os.makedirs(os.path.dirname(target))
     
     if os.path.exists(target):
         remove_file(target)
     
     src_path = os.path.join(base_path, *src)
+    logging.debug("linking '%s' to '%s'" % (src_path, target))
     os.symlink(target, src_path)
     return [target]
 
@@ -77,6 +84,7 @@ def fix_object_code(path, targets):
         return
     if tp.startswith('MachO-'):
         # Use MachO-specific routines.
+        logging.debug("fixing placeholders in MachO file '%s'" % path)
         rpaths = list(targets)
         macho_add_rpaths_to_file(path, rpaths)
         return
@@ -88,8 +96,7 @@ def fix_object_code(path, targets):
         f.close()
         return
 
-    #if verbose:
-    #    print "Fixing placeholders in:", path
+    logging.debug("fixing placeholders in file '%s'" % path)
     for m in matches:
         rest = m.group(1)
         while rest.startswith('/PLACEHOLD'):

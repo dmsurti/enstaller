@@ -10,17 +10,15 @@
 import os
 import re
 import json
+import logging
 
 # local imports
 from .abstract_metadata import AbstractMetadata
 
-python_pat = re.compile(r'(.+)\.py(c|o)?$')
-namespace_package_pat = re.compile(
-    r'\s*__import__\([\'"]pkg_resources[\'"]\)\.declare_namespace'
-    r'\(__name__\)\s*$')
+# set up logger
+logger = logging.getLogger(__name__)
 
-def is_namespace(data):
-    return namespace_package_pat.match(data) is not None
+python_pat = re.compile(r'(.+)\.py(c|o)?$')
 
 entry_point_section_pat = re.compile('^\[(?P<section>[^\]]*)\]$')
 entry_point_pat = re.compile(r'(?P<name>\S+)\s*=\s*(?P<module>(\w|\.)+)'+
@@ -40,6 +38,8 @@ class EggMetadata(AbstractMetadata):
         self.name, self.version = self.egg_name.split('-', 1) \
                 if '-' in self.egg_name else (self.egg_name, '')
         self.cname = self.name.lower()
+        
+        logger.debug('New EggMetadata() object for "%s" % self.filename')
         
     
     def is_pkg_info(self, path, platform):
@@ -98,6 +98,7 @@ class EggMetadata(AbstractMetadata):
         """
         executables_path = ('EGG-INFO', 'inst', 'files_to_install.txt')
         if executables_path in bundle:
+            logger.debug('Parsing %s inst/files_to_install.txt for executables' % self.egg_name)
             return self._parse_executables(bundle.get_bytes(executables_path))
         else:
             return []
@@ -108,9 +109,12 @@ class EggMetadata(AbstractMetadata):
         """
         libraries_path = ('EGG-INFO', 'inst', 'targets.dat')
         if libraries_path in bundle:
-            return list(bundle.get_bytes(libraries_path).splitlines()) + ['lib']
+            logger.debug('Parsing %s inst/targets.dat for lib dirs' % self.egg_name)
+            lib_dirs = list(bundle.get_bytes(libraries_path).splitlines()) + ['lib']
         else:
-            return ['lib']
+            logger.debug('No inst/targets.dat in %s' % self.egg_name)
+            lib_dirs = ['lib']
+        return lib_dirs
     
     def get_scripts(self, bundle):
         """ Get the gui and console scripts from the entry_points.txt file
@@ -118,8 +122,10 @@ class EggMetadata(AbstractMetadata):
         """
         entry_points_path = ('EGG-INFO', 'entry_points.txt')
         if entry_points_path in bundle:
+            logger.debug('Parsing %s entry_points.txt' % self.egg_name)
             entry_points = self._parse_entry_points(bundle.get_bytes(entry_points_path))
         else:
+            logger.debug('No entry_points.txt found in  %s.' % self.egg_name)
             entry_points = {}
             
         gui_scripts = entry_points.get('gui_scripts', {})
@@ -135,11 +141,13 @@ class EggMetadata(AbstractMetadata):
         
         # get basic dependency information
         if ('EGG-INFO', 'spec', 'depend') in package:
+            logger.debug('Parsing %s spec/depend for metadata' % self.egg_name)
             metadata.update(self._parse_depend(package.get_bytes(('EGG-INFO',
                 'spec', 'depend'))))
         
         # get info.json information
         if ('EGG-INFO', 'info.json') in package:
+            logger.debug('Parsing %s info.json for metadata' % self.egg_name)
             metadata.update(json.loads(package.get_bytes(('EGG-INFO', 'info.json'))))
         
         # remove 'available' key if present
@@ -168,17 +176,14 @@ class EggMetadata(AbstractMetadata):
         """
         sections = {}
         section = None
-        for line in data.splitlines():
-            print "'%s': " % line,
+        for i, line in enumerate(data.splitlines()):
             text = line.strip()
             if text == '' or text.startswith('#'):
-                print 'skip'
                 continue
             m = entry_point_section_pat.match(text)
             if m is not None:
                 section = m.groupdict()['section']
                 sections.setdefault(section, {})
-                print 'section', section
                 continue
             
             if section is not None:
@@ -187,10 +192,10 @@ class EggMetadata(AbstractMetadata):
                     d = m.groupdict()
                     name = d.pop('name')
                     sections[section][name] = d
-                    print 'name', name, 'data', d
                 else:
                     # XXX bad entry point file - should at least log
-                    print 'bad'
+                    logger.error("Can't parse entry point '%s' (line %d)" %
+                        (line, i))
                     pass
         
         return sections

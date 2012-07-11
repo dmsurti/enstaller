@@ -6,6 +6,11 @@
 # LICENSE.txt
 #
 
+import logging
+
+# set up logger
+logger = logging.getLogger(__name__)
+
 name = 'windows'
 
 is_win = True
@@ -24,25 +29,30 @@ def remove_file(path):
     
     """
     import os
+    logging.debug("removing '%s'" % path)
     if os.path.islink(path):
         os.path.unlink(path)
     elif os.path.isdir(path):
         import shutil
         try:
-            shutil.remtree(path)
+            shutil.rmtree(path)
         except (WindowsError, IOError):
             # directory is in use - move to a temporary directory instead
             import tempfile
-            os.rename(path, os.path.join(tempfile.mkdtemp(),
-                os.path.basename(path)))
+            newfile = os.path.join(tempfile.mkdtemp(), os.path.basename(path))
+            logging.error("Could not remove directory '%s', renaming to '%s'" %
+                (path, newfile))
+            os.rename(path, newfile)
     else:
         try:
             os.unlink(path)
         except (WindowsError, IOError):
             # file is in use - move to a temporary directory instead
             import tempfile
-            os.rename(path, os.path.join(tempfile.mkdtemp(),
-                os.path.basename(path)))
+            newfile = os.path.join(tempfile.mkdtemp(), os.path.basename(path))
+            logging.error("Could not remove file '%s', renaming to '%s'" %
+                (path, newfile))
+            os.rename(path, newfile)
 
 def link_executable(base_path, src, target, executable=None):
     """ Create a link to the src called target
@@ -51,17 +61,24 @@ def link_executable(base_path, src, target, executable=None):
     import os
     
     if target == 'PROXY':
-        target_dir = os.path.join(base_path, bin_dir_name)
+        target_dir = os.path.join(base_path, *bin_dir)
+        if not os.path.isdir(target_dir):
+            logging.debug("creating directory '%s'" % target_dir)
+            os.makedirs(target_dir)
         target_name = src[-1]
         assert target_name.endswith('.exe')
         if target_name.startswith('epd-'):
+            # XXX what's the story about this special case?
             target_name = target_name[4:]
         
         target_script_name = target_name[:-4]+'-script.py'
         target_script_path = os.path.join(target_dir, target_script_name)
+        logging.debug("creating proxy for '%s' at '%s'" % (target,
+            target_script_path))
         if os.path.exists(target_script_path):
             remove_file(target_script_path)
         with open(target_script_name, 'w') as fp:
+            logging.debug("writing '%s'" % target_script_path)
             fp.write('''\
 #!"%(python)s"
 # This proxy was created by egginst from an egg with special instructions
@@ -77,11 +94,13 @@ sys.exit(subprocess.call([src] + sys.argv[1:]))
         
     else:
         if not os.path.isdir(os.path.dirname(target)):
+            logging.debug("creating directory '%s'" % os.path.dirname(target))
             os.makedirs(os.path.dirname(target))
         if os.path.exists(target):
             remove_file(target)
         
         src_path = os.path.join(base_path, *src)
+        logging.debug("copying '%s' to '%s'" % (src_path, target))
         with open(src_path, 'rb') as fp:
             data = fp.read()
         with open(target, 'wb') as fp:
@@ -122,6 +141,7 @@ def script_extras(path, name, script_type):
         remove_file(dst)
     
     try:
+        logging.debug("writing .exe wrapper '%s' for '%s'" % (dst, name))
         with open(dst, 'wb') as fp:
             fp.write(data)
             return [dst]

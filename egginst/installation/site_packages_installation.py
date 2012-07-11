@@ -12,15 +12,18 @@ import re
 import errno
 import json
 import cStringIO
-import shutil
-import tempfile
+import logging
 
 from .abstract_installation import AbstractInstallation
+
+# set up logger
+logger = logging.getLogger(__name__)
 
 python_pat = re.compile(r'(.+)\.py(c|o)?$')
 namespace_package_pat = re.compile(
     r'\s*__import__\([\'"]pkg_resources[\'"]\)\.declare_namespace'
     r'\(__name__\)\s*$')
+hashbang_pat = re.compile(r'#!.+$', re.M)
 
 def is_namespace(data):
     return namespace_package_pat.match(data) is not None
@@ -97,6 +100,8 @@ class SitePackagesInstallation(AbstractInstallation):
         self.py_path = self.platform.rel_site_packages
         self.egginfo_path = ('EGG-INFO',)
         self.bin_dir = self.platform.bin_dir
+        
+        logger.debug('New SitePackagesInstallation() object for "%s" % self.path')
 
     # implementation API
     
@@ -111,15 +116,20 @@ class SitePackagesInstallation(AbstractInstallation):
         rel_path = self.egginfo_path + (metadata.cname, 'egginst.json')
         meta_json = os.path.join(self.path, *rel_path)
         if os.path.isfile(meta_json):
+            logger.info('Removing old egginst.json "%s" from installation at "%s"'
+                % (metadata.cname, self.path))
             self._remove(meta_json)
     
     def write_files(self, package, metadata):
         """ Write all files in the package to the installation
         
         """
+        logger.info('Writing files for "%s" to installation at "%s"'
+            % (metadata.egg_name, self.path))
         files_written = []
         for path in package:
             if self.skip_file(package, path):
+                logger.debug("skipping '%s'" % '/'.join(path))
                 continue
             classification, dest_path = self.get_dest_path(path, metadata)
             self.write_file(package, path, dest_path)
@@ -128,6 +138,7 @@ class SitePackagesInstallation(AbstractInstallation):
             files_written += self.handle_classification(classification, dest_path)
             
             if metadata.is_executable(path):
+                logger.debug('chmod %s 0755' % '/'.join(dest_path))
                 os.chmod(os.path.join(self.path, *dest_path), 0755)
         
         return files_written
@@ -136,10 +147,11 @@ class SitePackagesInstallation(AbstractInstallation):
         """ Install executable files in locations as directed by metadata
         
         """
+        logger.info('Installing executables for "%s" in installation at "%s"'
+            % (metadata.egg_name, self.path))
         files_written = []
         for path, target in metadata.get_executables(bundle):
             dest_path = self.get_dest_path(path, metadata)
-            print '---->', dest_path, target
             files_written += self.platform.link_executable(self.path, dest_path,
                 target, self.interpreter)
         return files_written
@@ -148,6 +160,8 @@ class SitePackagesInstallation(AbstractInstallation):
         """ Patch object code to replace placeholder paths
         
         """
+        logger.info('Patching object code for "%s" in installation at "%s"'
+            % (metadata.egg_name, self.path))
         targets = [os.path.join(self.path, path)
             for path in metadata.get_library_dirs(bundle)]
         for path in files:
@@ -157,6 +171,8 @@ class SitePackagesInstallation(AbstractInstallation):
         """ Install all entry point scripts
         
         """
+        logger.info('Installing scripts for "%s" in installation at "%s"'
+            % (metadata.egg_name, self.path))
         bin_dir = os.path.join(self.path, *self.bin_dir)
         files_written = []
         for script_type, scripts in metadata.get_scripts(package).items():
@@ -173,20 +189,27 @@ class SitePackagesInstallation(AbstractInstallation):
         rel_path = self.egginfo_path + (metadata.cname, 'inst', 'appinst.dat')
         path = os.path.join(self.path, *rel_path)
         if os.path.isfile(path):
+            logger.info('Installing apps for "%s" in installation at "%s"'
+                % (metadata.egg_name, self.path))
             try:
                 import appinst
-                appinst.install_from_dat(path)
             except ImportError:
-                # XXX probably should log this...
-                return
+                logger.error('Could not import appinst, skipping')
+
+            try:
+                appinst.install_from_dat(path)
             except Exception as exc:
-                # XXX should log properly
-                print 'Error installing app:', exc
+                logger.error('Error installing app for "%s" in installation at "%s"'
+                    % (metadata.egg_name, self.path))
+                logger.exception(exc)
+                # XXX should we perhaps just fail here?
     
     def uninstall_app(self, metadata):
         path = os.path.join(self.egginfo_path, metadata.cname, 'inst',
             'appinst.dat')
         if sys.path.isfile(path):
+            logger.info('Uninstalling apps for "%s" in installation at "%s"'
+                % (metadata.egg_name, self.path))
             try:
                 import appinst
                 appinst.uninstall_from_dat(path)
@@ -203,6 +226,8 @@ class SitePackagesInstallation(AbstractInstallation):
         Installation, and by the uninstall method.
         
         """
+        logger.info('Writing metadata for "%s" in installation at "%s"'
+            % (metadata.egg_name, self.path))
         rel_path = self.egginfo_path + (metadata.cname,)
         meta_dir = os.path.join(self.path, *rel_path)
         try:
@@ -233,7 +258,10 @@ class SitePackagesInstallation(AbstractInstallation):
     def post_install(self, metadata):
         rel_path = self.egginfo_path + (metadata.cname, 'post_egginst.py')
         path = os.path.join(self.path, *rel_path)
-        self.run(path)
+        if os.path.exists(path):
+            logger.info('Running post install script for "%s" in installation at "%s"'
+                % (metadata.egg_name, self.path))
+            self.run(path)
    
     # private API 
             
@@ -288,6 +316,7 @@ class SitePackagesInstallation(AbstractInstallation):
         actual_path = os.path.join(self.path, *dest_path)
         # remove contents if __init__.py is a namespace package
         if path[-1] == '__init__.py' and is_namespace(package.get_bytes(path)):
+            logger.info("ignoring namespace packages for '%s'" % '.'.join(path[:-1]))
             data = cStringIO.StringIO('')
         else:
             data = package.open(path)
@@ -298,6 +327,7 @@ class SitePackagesInstallation(AbstractInstallation):
             if os.path.exists(directory) and not os.path.isdir(directory):
                 self._remove(directory)
             try:
+                logger.debug("creating directory '%s'" % directory)
                 os.makedirs(directory)
             except OSError as exc:
                 if exc.errno != errno.EEXIST or not os.path.isdir(directory):
@@ -305,6 +335,8 @@ class SitePackagesInstallation(AbstractInstallation):
             
             # blow away old file if it exists
             self._remove(actual_path)
+
+            logger.debug("writing '%s' to '%s'" % ('/'.join(path), actual_path))
             
             with open(actual_path, 'wb') as fp:
                 while True:
@@ -324,6 +356,7 @@ class SitePackagesInstallation(AbstractInstallation):
             callable=entry_point['attrs'],
             executable=self.interpreters[script_type],
         )
+        logger.debug("writing entry point script '%s' to '%s'" % (fname, path))
         with open(os.path.join(path, fname), 'w') as fp:
             fp.write(script)
         os.chmod(path, 0755)
@@ -332,6 +365,7 @@ class SitePackagesInstallation(AbstractInstallation):
         if not os.path.isfile(path):
             return
         from subprocess import call
+        logger.debug("running '%s'" % path)
         call([sys.executable, '-E', path, '--prefix', self.prefix],
              cwd=os.path.dirname(path))
     
@@ -346,8 +380,23 @@ class SitePackagesInstallation(AbstractInstallation):
         to hardcode the correct Python interpreter in the #!
         
         """
+        src_path = os.path.join(self.path, *path)
+        if os.path.islink(src_path) or not os.path.isfile(src_path):
+            return []
+        with open(src_path) as fp:
+            code = fp.read()
+        match = hashbang_pat.match(code)
+        if match is None or 'python' not in match.group().lower():            
+            return []
         
-        return []
+        python = self.platform.get_executable()
+        if self.platform.is_win:
+            python = '"'+python+'"'
+        new_code = hashbang_pat.sub('#!'+python.replace('\\', r'\\'), code,
+            count=1)
+        logger.debug("updating #! executable in '%s'" % src_path)
+        with open(src_path, 'w') as fp:
+            fp.write(new_code)
     
     def _remove(self, path):
         # we want the actual platform here so we do the right file ops
