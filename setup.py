@@ -25,6 +25,7 @@ setup(
     description = "Install and managing tool for egg-based packages",
     packages = [
         'egginst',
+        'egginst/macho',
         'enstaller',
         'enstaller/store',
         'enstaller/indexed_repo',
