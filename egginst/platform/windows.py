@@ -14,6 +14,8 @@ bin_dir_name = 'Scripts'
 
 rel_site_packages = ('Lib', 'site-packages')
 
+pylib_ext = '.pyd'
+
 def remove_file(path):
     """ Remove or unlink a file or directory
     
@@ -42,7 +44,7 @@ def remove_file(path):
             os.rename(path, os.path.join(tempfile.mkdtemp(),
                 os.path.basename(path)))
 
-def install_file(base_path, src, target, executable=None):
+def link_executable(base_path, src, target, executable=None):
     """ Create a link to the src called target
     
     """

@@ -18,6 +18,8 @@ bin_dir_name = 'bin'
 # Python's site packages...
 rel_site_packages = ('lib', 'python%i.%i' % sys.version_info[:2], 'site-packages')
 
+pylib_ext = '.so'
+
 def remove_file(path):
     """ Remove or unlink a file or directory
     
@@ -29,7 +31,7 @@ def remove_file(path):
     else:
         os.unlink(path)
 
-def install_file(base_path, src, target):
+def link_executable(base_path, src, target):
     """ Create a link to the src called target
     
     """
