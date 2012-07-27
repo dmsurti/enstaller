@@ -37,7 +37,7 @@ class AbstractInstallation(object):
             self.write_metadata(bundle, metadata, files, install_progress)
 
     
-    def uninstall(self, egg_name):
+    def uninstall(self, egg_name, progress=None):
         """ Remove a package from this installation
         
         """

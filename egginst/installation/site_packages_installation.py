@@ -108,7 +108,7 @@ class SitePackagesInstallation(AbstractInstallation):
 
     # Public API
         
-    def uninstall(self, cname):
+    def uninstall(self, cname, progress=None):
         """ Remove a package from this installation
         
         """
@@ -117,14 +117,15 @@ class SitePackagesInstallation(AbstractInstallation):
             for path in metadata['files']]
         dirs = set(tuple(path.split('/')[1:-1]) for path in metadata['files'])
         
-        progress = ProgressManager(
+        uninstall_progress = ProgressManager(
             message="uninstalling egg",
             steps=len(files) + len(dirs),
             progress_type="uninstalling",
+            super_id=progress.id if progress is not None else None,
         )
         completion = 0
 
-        with progress:
+        with uninstall_progress:
             self.uninstall_app(cname)
             for file in files:
                 self._remove(file)
@@ -132,12 +133,12 @@ class SitePackagesInstallation(AbstractInstallation):
                     self._remove(file+'c')
                     self._remove(file+'o')
                 completion += 1
-                progress(step=completion)
+                uninstall_progress(step=completion)
             
             for dir in dirs:
                 self._remove_empty(dir)
                 completion += 1
-                progress(step=completion)
+                uninstall_progress(step=completion)
             
             self._remove_empty(self.egginfo_path)
     
