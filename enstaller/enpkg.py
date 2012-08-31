@@ -13,13 +13,13 @@ from egg_meta import is_valid_eggname, split_eggname
 from history import History
 
 
-def create_joined_store(urls):
+def create_joined_store(urls, cache=False):
     stores = []
     for url in urls:
         if url.startswith('file://'):
             stores.append(LocalIndexedStore(url[7:]))
         elif url.startswith(('http://', 'https://')):
-            stores.append(RemoteHTTPIndexedStore(url))
+            stores.append(RemoteHTTPIndexedStore(url, cache))
         elif isdir(url):
             stores.append(LocalIndexedStore(url))
         else:
@@ -31,7 +31,7 @@ def get_default_url():
     return 'https://api.enthought.com/eggs/%s/' % plat.custom_plat
 
 def get_default_kvs():
-    return RemoteHTTPIndexedStore(get_default_url())
+    return RemoteHTTPIndexedStore(get_default_url(), cache=True)
 
 def req_from_anything(arg):
     if isinstance(arg, Req):
@@ -49,11 +49,16 @@ class Enpkg(object):
     This is main interface for using enpkg, it is used by the CLI.
     Arguments for object creation:
 
+    All arguments are optional.
+
     remote: key-value store (KVS) instance
         This is the KVS which enpkg will try to connect to for querying
         and fetching eggs.
 
-    All remaining arguments are optional.
+        If you don't pass this argument (or pass None), a default kvs
+        will be created for you (via get_default_kvs), and it will
+        have caching enabled. If you would like caching to be
+        disabled, you can create your own with create_joined_store.
 
     userpass: tuple(username, password) -- default, see below
         these credentials are used when the remote KVS instance is being
