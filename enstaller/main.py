@@ -154,40 +154,36 @@ def search(enpkg, pat=None):
     """
     # Flag indicating if the user received any 'not subscribed to'
     # messages
-    SUBSCRIBED = True
+    subscribed = True
 
     print FMT4 % ('Name', '  Versions', 'Product', 'Note')
     print 80 * '='
 
-    names = {}
-    for key, info in enpkg.query_remote():
-        names[info['name']] = name_egg(key)
+    all = enpkg.query_remote()
+    installed = enpkg.query_installed()
 
-    installed = {}
-    for key, info in enpkg.query_installed():
-        installed[info['name']] = VB_FMT % info
+    names = {metadata['name']: name_egg(key) for key, metadata in all}
+    installed = {metadata['name']: VB_FMT % metadata for _, metadata in installed}
 
     for name in sorted(names, key=string.lower):
         if pat and not pat.search(name):
             continue
         disp_name = names[name]
-        installed_version = installed.get(name)
         for info in enpkg.info_list_name(name):
             version = VB_FMT % info
-            disp_ver = (('* ' if installed_version == version else '  ') +
-                        version)
             available = info.get('available', True)
-            product = info.get('product', '')
-            if not(available):
-                SUBSCRIBED = False
-            print FMT4 % (disp_name, disp_ver, product,
-                   '' if available else 'not subscribed to')
+            if not available:
+                subscribed = False
+            print FMT4 % (disp_name,
+                          ('* ' if installed.get(name) == version else '  ') + version,
+                          info.get('product', ''),
+                          '' if available else 'not subscribed to')
             disp_name = ''
 
     # if the user's search returns any packages that are not available
     # to them, attempt to authenticate and print out their subscriber
     # level
-    if config.get('use_webservice') and not(SUBSCRIBED):
+    if config.get('use_webservice') and not(subscribed):
         user = {}
         try:
             user = config.authenticate(config.get_auth())

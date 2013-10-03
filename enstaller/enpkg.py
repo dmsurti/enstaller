@@ -3,11 +3,12 @@ import warnings
 from uuid import uuid4
 from os.path import isdir, isfile, join
 import os
+import plat
 import threading
 
 import enstaller
 
-from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore
+from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore, IndexedStore
 from store.joined import JoinedStore
 
 from eggcollect import EggCollection, JoinedEggCollection
@@ -16,6 +17,9 @@ from resolve import Req, Resolve, comparable_info
 from fetch import FetchAPI
 from egg_meta import is_valid_eggname, split_eggname
 from history import History
+
+from grits_client.storage.client_store import GritsClientStore
+
 
 # Included for backward compatibility
 from enstaller.config import get_default_url
@@ -49,7 +53,7 @@ def req_from_anything(arg):
 
 def get_package_path(prefix):
     """Return site-packages path for the given repo prefix.
-    
+
     Note: on windows the path is lowercased and returned.
     """
     if sys.platform == 'win32':
@@ -103,12 +107,33 @@ def get_writable_local_dir(prefix):
 class EnpkgError(Exception):
     req = None
 
+class GritsClientStoreEnpkg(IndexedStore, GritsClientStore):
+    def connect(self, creds):
+        GritsClientStore.connect(self, creds)
+        IndexedStore.connect(self, creds)
+
+    def get_index(self):
+        return dict((self.egg_name(k), v) for k, v in GritsClientStore.query(self, platform=plat.custom_plat))
+
+    def info(self):
+        return dict(root=self.url)
+
+    def get_data(self, egg):
+        return GritsClientStore.get_data(self, self.key_name(egg))
+
+    @staticmethod
+    def egg_name(key):
+        return key.split('/')[-1]
+
+    @staticmethod
+    def key_name(egg):
+        return 'enthought/eggs/{}/{}'.format(plat.custom_plat, egg)
+
+
 
 def get_default_remote(prefixes):
     url = enstaller.config.read()['webservice_entry_point']
-    local_dir = get_writable_local_dir(prefixes[0])
-    return RemoteHTTPIndexedStore(url, local_dir)
-
+    return GritsClientStoreEnpkg(url)
 
 class Enpkg(object):
     """
@@ -153,7 +178,8 @@ class Enpkg(object):
             self.remote = remote
         if userpass == '<config>':
             import config
-            self.userpass = config.get_auth()
+            #self.userpass = config.get_auth()
+            self.userpass = ('admin', 'admin')
         else:
             self.userpass = userpass
 
