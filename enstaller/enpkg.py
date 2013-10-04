@@ -1,4 +1,5 @@
 import sys
+import config
 import warnings
 from uuid import uuid4
 from os.path import isdir, isfile, join
@@ -175,9 +176,7 @@ class Enpkg(object):
         else:
             self.remote = remote
         if userpass == '<config>':
-            import config
-            #self.userpass = config.get_auth()
-            self.userpass = ('admin', 'admin')
+            self.userpass = config.get_auth()
         else:
             self.userpass = userpass
 
