@@ -107,13 +107,13 @@ def get_writable_local_dir(prefix):
 class EnpkgError(Exception):
     req = None
 
-class GritsClientStoreEnpkg(IndexedStore, GritsClientStore):
+class GritsIndexedStore(IndexedStore, GritsClientStore):
     def connect(self, creds):
         GritsClientStore.connect(self, creds)
         IndexedStore.connect(self, creds)
 
     def get_index(self):
-        return dict((self.egg_name(k), v) for k, v in GritsClientStore.query(self, platform=plat.custom_plat))
+        return {self.egg_name(k): v for k, v in GritsClientStore.query(self, platform=plat.custom_plat)}
 
     def info(self):
         return dict(root=self.url)
@@ -129,11 +129,9 @@ class GritsClientStoreEnpkg(IndexedStore, GritsClientStore):
     def key_name(egg):
         return 'enthought/eggs/{}/{}'.format(plat.custom_plat, egg)
 
-
-
 def get_default_remote(prefixes):
     url = enstaller.config.read()['webservice_entry_point']
-    return GritsClientStoreEnpkg(url)
+    return GritsIndexedStore(url)
 
 class Enpkg(object):
     """
