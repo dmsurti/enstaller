@@ -1,6 +1,7 @@
 import sys
 import config
 import warnings
+import requests
 from uuid import uuid4
 from os.path import isdir, isfile, join
 import os
@@ -114,7 +115,11 @@ class GritsIndexedStore(IndexedStore, GritsClientStore):
         IndexedStore.connect(self, creds)
 
     def get_index(self):
-        return {self.egg_name(k): v for k, v in GritsClientStore.query(self, platform=plat.custom_plat)}
+        index = GritsClientStore.query(self,
+                                       platform=plat.custom_plat,
+                                       type='egg',
+                                       qa_level='stable')
+        return {self.egg_name(k): v for k, v in index}
 
     def info(self):
         return dict(root=self.url)
@@ -131,8 +136,15 @@ class GritsIndexedStore(IndexedStore, GritsClientStore):
         return 'enthought/eggs/{}/{}'.format(plat.custom_plat, egg)
 
 def get_default_remote(prefixes):
-    url = enstaller.config.read()['webservice_entry_point']
-    return GritsIndexedStore(url)
+    grits_url = enstaller.config.read()['query_entry_point']
+    web_url = enstaller.config.read()['webservice_entry_point']
+
+    if requests.get(grits_url + '/available').status_code == 200:
+        return GritsIndexedStore(grits_url)
+    else:
+        local_dir = get_writable_local_dir(prefixes[0])
+        return RemoteHTTPIndexedStore(web_url, local_dir)
+
 
 class Enpkg(object):
     """

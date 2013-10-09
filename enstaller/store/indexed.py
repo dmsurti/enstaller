@@ -17,9 +17,6 @@ class IndexedStore(AbstractStore):
 
         self._index = self.get_index()
 
-        #for k, v in self._index.iteritems():
-        #    print k, v
-
         for info in self._index.itervalues():
             info['store_location'] = self.info().get('root')
             info.setdefault('type', 'egg')
