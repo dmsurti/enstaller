@@ -150,13 +150,14 @@ def imports_option(enpkg, pat=None):
 
 def infos_by_name(infos):
     '''
-    Given a list of egg metadata dictionaries, returns a dictionary
-    mapping egg names to a list of the name's metadata, sorted by version.
+    Given a list of egg info dictionaries, returns a dictionary
+    mapping egg names to a list of the name's info, sorted by version.
     '''
 
     info_dict = defaultdict(list)
     for info in infos:
         info_dict[info['name']].append(info)
+
     return {k: sorted(v, key=comparable_info) for k, v in info_dict.iteritems()}
 
 def search(enpkg, pat=None):
@@ -170,9 +171,9 @@ def search(enpkg, pat=None):
     print FMT4 % ('Name', '  Versions', 'Product', 'Note')
     print 80 * '='
 
-    all = enpkg.query_remote()
-    names = {metadata['name']: egg_name(key) for key, metadata in all}
-    installed = {metadata['name']: VB_FMT % metadata for _, metadata in enpkg.query_installed()}
+    all = list(enpkg.query_remote())
+    names = {info['name']: egg_name(key) for key, info in all}
+    installed = {info['name']: VB_FMT % info for _, info in enpkg.query_installed()}
 
     infos = infos_by_name(info for _, info in all)
 

@@ -109,6 +109,7 @@ def get_writable_local_dir(prefix):
 class EnpkgError(Exception):
     req = None
 
+
 class GritsEggStore(GritsClientStore):
     def __init__(self, url):
         super(GritsEggStore, self).__init__(url)
@@ -154,15 +155,21 @@ class GritsEggStore(GritsClientStore):
     def key_name(egg):
         return 'enthought/eggs/{}/{}'.format(plat.custom_plat, egg)
 
-def get_default_remote(prefixes):
-    grits_url = enstaller.config.read()['query_entry_point']
-    web_url = enstaller.config.read()['webservice_entry_point']
 
-    if requests.get(grits_url + '/available').status_code == 200:
-        return GritsEggStore(grits_url)
-    else:
+def get_default_remote(prefixes):
+    def _remote_store():
+        web_url = enstaller.config.read()['webservice_entry_point']
         local_dir = get_writable_local_dir(prefixes[0])
         return RemoteHTTPIndexedStore(web_url, local_dir)
+
+    grits_url = enstaller.config.read()['query_entry_point']
+    try:
+        if requests.get(grits_url + '/available').status_code == 200:
+            return GritsEggStore(grits_url)
+        else:
+            return _remote_store()
+    except:
+        return _remote_store()
 
 
 class Enpkg(object):
@@ -337,9 +344,7 @@ class Enpkg(object):
                             extra_info = self.remote.get_metadata(egg)
                         else:
                             extra_info = None
-                        print 'egg: ', egg
                         self.ec.install(egg, self.local_dir, extra_info)
-                        print 'after'
                     else:
                         raise Exception("unknown opcode: %r" % opcode)
                     progress(step=n)
