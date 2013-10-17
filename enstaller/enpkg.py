@@ -115,9 +115,6 @@ class GritsEggStore(GritsClientStore):
         super(GritsEggStore, self).__init__(url)
         self.metadata_cache = {}
 
-    def connect(self, creds):
-        GritsClientStore.connect(self, creds)
-
     def query(self, **kwargs):
         kwargs['platform'] = plat.custom_plat
         ret = [(self.egg_name(k), self._default_metadata(v))
