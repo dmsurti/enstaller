@@ -1,5 +1,4 @@
 import sys
-import config
 import warnings
 import requests
 from uuid import uuid4
@@ -9,8 +8,9 @@ import plat
 import threading
 
 import enstaller
+import config
 
-from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore, IndexedStore
+from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore
 from store.joined import JoinedStore
 
 from eggcollect import EggCollection, JoinedEggCollection
@@ -109,9 +109,9 @@ def get_writable_local_dir(prefix):
 class EnpkgError(Exception):
     req = None
 
-class GritsIndexedStore(GritsClientStore):
+class GritsEggStore(GritsClientStore):
     def __init__(self, url):
-        super(GritsIndexedStore, self).__init__(url)
+        super(GritsEggStore, self).__init__(url)
         self.metadata_cache = {}
 
     def connect(self, creds):
@@ -120,21 +120,21 @@ class GritsIndexedStore(GritsClientStore):
     def query(self, **kwargs):
         kwargs['platform'] = plat.custom_plat
         ret = [(self.egg_name(k), self._default_metadata(v))
-               for k, v in super(GritsIndexedStore, self).query(**kwargs)]
+               for k, v in super(GritsEggStore, self).query(**kwargs)]
         self.metadata_cache.update(dict(ret))
         return ret
 
     def get(self, egg):
-        return super(GritsIndexedStore, self).get(self.key_name(egg))
+        return super(GritsEggStore, self).get(self.key_name(egg))
 
     def get_data(self, egg):
-        return super(GritsIndexedStore, self).get_data(self.key_name(egg))
+        return super(GritsEggStore, self).get_data(self.key_name(egg))
 
     def get_metadata(self, egg):
         if egg in self.metadata_cache:
             return self.metadata_cache[egg]
         else:
-            metadata = self._default_metadata(super(GritsIndexedStore, self).
+            metadata = self._default_metadata(super(GritsEggStore, self).
                                               get_metadata(self.key_name(egg)))
             self.metadata_cache[egg] = metadata
             return metadata
@@ -159,10 +159,8 @@ def get_default_remote(prefixes):
     web_url = enstaller.config.read()['webservice_entry_point']
 
     if requests.get(grits_url + '/available').status_code == 200:
-        print 'grits'
-        return GritsIndexedStore(grits_url)
+        return GritsEggStore(grits_url)
     else:
-        print 'not grits'
         local_dir = get_writable_local_dir(prefixes[0])
         return RemoteHTTPIndexedStore(web_url, local_dir)
 
