@@ -179,7 +179,7 @@ class TestChain1(unittest.TestCase):
                     repo_name)
 
     def test_reqs_dist(self):
-        self.assertEqual(self.c.reqs_egg('FiPy-2.1-1.egg'),
+        self.assertEqual(self.c.egg_reqs('FiPy-2.1-1.egg'),
                          set([Req('distribute'),
                               Req('scipy'),
                               Req('numpy'),

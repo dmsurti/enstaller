@@ -114,24 +114,22 @@ class Resolve(object):
         return the egg with the largest version and build number
         """
         assert req.strictness >= 1
-        d = dict(self.repo.query(type='egg', name=req.name))
-        if not d:
-            return None
-        matches = []
-        for key, info in d.iteritems():
-            if req.matches(info) and info.get('available', True):
-                matches.append(key)
-        if not matches:
-            return None
-        return max(matches, key=lambda k: comparable_info(d[k]))
 
-    def reqs_egg(self, egg):
+        eggs = dict(self.repo.query(type='egg', name=req.name))
+        matches = [egg for egg, metadata in eggs.iteritems()
+                   if req.matches(metadata) and metadata.get('available', True)]
+        if matches:
+            return max(matches, key=lambda egg: comparable_info(eggs[egg]))
+        else:
+            return None
+
+    def egg_reqs(self, egg):
         """
         return the set of requirement objects listed by the given egg
         """
-        return set(Req(s) for s in self.repo.get_metadata(egg)['packages'])
+        return {Req(pkg) for pkg in self.repo.get_metadata(egg)['packages']}
 
-    def name_egg(self, egg):
+    def egg_name(self, egg):
         """
         return the project name for a given egg (from it's meta data)
         """
@@ -142,10 +140,10 @@ class Resolve(object):
         return True if the 'eggs' are complete, i.e. the for each egg all
         dependencies (by name only) are also included in 'eggs'
         """
-        names = set(self.name_egg(d) for d in eggs)
+        names = set(map(self.egg_name, eggs))
         for egg in eggs:
-            for r in self.reqs_egg(egg):
-                if r.name not in names:
+            for req in self.egg_reqs(egg):
+                if req.name not in names:
                     return False
         return True
 
@@ -159,16 +157,16 @@ class Resolve(object):
         assert self.are_complete(eggs)
 
         # make sure each project name is listed only once
-        assert len(eggs) == len(set(self.name_egg(d) for d in eggs))
+        assert len(eggs) == len(set(self.egg_name(d) for d in eggs))
 
         # the eggs corresponding to the requirements must be sorted
         # because the output of this function is otherwise not deterministic
-        eggs.sort(key=self.name_egg)
+        eggs.sort(key=self.egg_name)
 
         # maps egg -> set of required (project) names
         rns = {}
         for egg in eggs:
-            rns[egg] = set(r.name for r in self.reqs_egg(egg))
+            rns[egg] = set(r.name for r in self.egg_reqs(egg))
 
         # as long as we have things missing, simply look for things which
         # can be added, i.e. all the requirements have been added already
@@ -182,7 +180,7 @@ class Resolve(object):
                 # see if all required packages were added already
                 if all(bool(name in names_inst) for name in rns[egg]):
                     result.append(egg)
-                    names_inst.add(self.name_egg(egg))
+                    names_inst.add(self.egg_name(egg))
                     assert len(names_inst) == len(result)
 
             if len(result) == n:
@@ -192,7 +190,7 @@ class Resolve(object):
 
     def _sequence_flat(self, root):
         eggs = [root]
-        for r in self.reqs_egg(root):
+        for r in self.egg_reqs(root):
             d = self.get_egg(r)
             if d is None:
                 from enstaller.enpkg import EnpkgError
@@ -209,38 +207,38 @@ class Resolve(object):
         return eggs
 
     def _sequence_recur(self, root):
-        reqs_shallow = {}
-        for r in self.reqs_egg(root):
-            reqs_shallow[r.name] = r
+        reqs_shallow = {r.name: r for r in self.egg_reqs(root)}
         reqs_deep = defaultdict(set)
 
         def add_dependents(egg, visited=None):
             if visited is None:
                 visited = set()
             visited.add(egg)
-            for r in self.reqs_egg(egg):
-                reqs_deep[r.name].add(r)
-                if (r.name in reqs_shallow  and
-                        r.strictness < reqs_shallow[r.name].strictness):
+
+            for req in self.egg_reqs(egg):
+                reqs_deep[req.name].add(req)
+                if (req.name in reqs_shallow  and
+                    req.strictness < reqs_shallow[req.name].strictness):
                     continue
-                d = self.get_egg(r)
-                if d is None:
+
+                dep = self.get_egg(req)
+                if dep is None:
                     from enstaller.enpkg import EnpkgError
                     err = EnpkgError(('Error: could not resolve "%s" ' +
-                                     'required by "%s"') % (str(r), egg))
-                    err.req = r
+                                      'required by "%s"') % (str(req), egg))
+                    err.req = req
                     raise err
-                eggs.add(d)
-                if not d in visited:
-                    add_dependents(d, visited)
+                eggs.add(dep)
+                if not dep in visited:
+                    add_dependents(dep, visited)
 
-        eggs = set([root])
+        eggs = {root}
         add_dependents(root)
 
-        names = set(self.name_egg(d) for d in eggs)
+        names = {self.egg_name(egg) for egg in eggs}
         if len(eggs) != len(names):
             for name in names:
-                ds = [d for d in eggs if self.name_egg(d) == name]
+                ds = [d for d in eggs if self.egg_name(d) == name]
                 assert len(ds) != 0
                 if len(ds) == 1:
                     continue
@@ -251,7 +249,7 @@ class Resolve(object):
                 r = max(reqs_deep[name], key=lambda r: r.strictness)
                 assert r.name == name
                 # remove the eggs with name
-                eggs = [d for d in eggs if self.name_egg(d) != name]
+                eggs = [d for d in eggs if self.egg_name(d) != name]
                 # add the one
                 eggs.append(self.get_egg(r))
 

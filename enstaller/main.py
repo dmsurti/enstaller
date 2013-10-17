@@ -14,6 +14,7 @@ import errno
 import string
 import datetime
 import textwrap
+from collections import defaultdict
 from argparse import ArgumentParser
 from os.path import isfile, join
 
@@ -70,7 +71,7 @@ def disp_store_info(info):
     return sl.replace('/eggs/', ' ').strip('/')
 
 
-def name_egg(egg):
+def egg_name(egg):
     return split_eggname(egg)[0]
 
 
@@ -108,7 +109,7 @@ def print_installed(prefix, hook=False, pat=None):
     for egg, info in ec.query():
         if pat and not pat.search(info['name']):
             continue
-        print FMT % (name_egg(egg), VB_FMT % info, disp_store_info(info))
+        print FMT % (egg_name(egg), VB_FMT % info, disp_store_info(info))
 
 
 def list_option(prefixes, hook=False, pat=None):
@@ -147,6 +148,16 @@ def imports_option(enpkg, pat=None):
                 loc = 'sys' if c.prefix == sys.prefix else 'user'
         print FMT % (name, VB_FMT % info, loc)
 
+def infos_by_name(infos):
+    '''
+    Given a list of egg metadata dictionaries, returns a dictionary
+    mapping egg names to a list of the name's metadata, sorted by version.
+    '''
+
+    info_dict = defaultdict(list)
+    for info in infos:
+        info_dict[info['name']].append(info)
+    return {k: sorted(v, key=comparable_info) for k, v in info_dict.iteritems()}
 
 def search(enpkg, pat=None):
     """
@@ -160,16 +171,16 @@ def search(enpkg, pat=None):
     print 80 * '='
 
     all = enpkg.query_remote()
-    installed = enpkg.query_installed()
+    names = {metadata['name']: egg_name(key) for key, metadata in all}
+    installed = {metadata['name']: VB_FMT % metadata for _, metadata in enpkg.query_installed()}
 
-    names = {metadata['name']: name_egg(key) for key, metadata in all}
-    installed = {metadata['name']: VB_FMT % metadata for _, metadata in installed}
+    infos = infos_by_name(info for _, info in all)
 
     for name in sorted(names, key=string.lower):
         if pat and not pat.search(name):
             continue
         disp_name = names[name]
-        for info in enpkg.info_list_name(name):
+        for info in infos[name]:
             version = VB_FMT % info
             available = info.get('available', True)
             if not available:
@@ -195,8 +206,9 @@ def search(enpkg, pat=None):
 def updates_check(enpkg):
     updates = []
     EPD_update = []
+    infos = infos_by_name(info for _, info in enpkg.query_remote())
     for key, info in enpkg.query_installed():
-        av_infos = enpkg.info_list_name(info['name'])
+        av_infos = infos[info['name']]
         if len(av_infos) == 0:
             continue
         av_info = av_infos[-1]
@@ -221,7 +233,7 @@ def whats_new(enpkg):
             print FMT % ('Name', 'installed', 'available')
             print 60 * "="
             for update in updates:
-                print FMT % (name_egg(update['current']['key']),
+                print FMT % (egg_name(update['current']['key']),
                              VB_FMT % update['current'],
                              VB_FMT % update['update'])
 
@@ -241,7 +253,7 @@ def update_all(enpkg, args):
             print FMT % ('Name', 'installed', 'available')
             print 60 * "="
             for update in updates:
-                print FMT % (name_egg(update['current']['key']),
+                print FMT % (egg_name(update['current']['key']),
                              VB_FMT % update['current'],
                              VB_FMT % update['update'])
             for update in updates:
@@ -450,7 +462,6 @@ def update_enstaller(enpkg, opts):
     except EnpkgError as e:
         print "Can't update enstaller:", e
     return updated
-
 
 def main():
     try:
