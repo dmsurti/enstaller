@@ -118,7 +118,7 @@ class GritsEggStore(GritsClientStore):
     def query(self, **kwargs):
         kwargs['platform'] = plat.custom_plat
         ret = [(self.egg_name(k), self._default_metadata(v))
-               for k, v in super(GritsEggStore, self).query(**kwargs)]
+               for k, v in super(GritsEggStore, self).query(space='enthought', **kwargs)]
         self.metadata_cache.update(dict(ret))
         return ret
 
