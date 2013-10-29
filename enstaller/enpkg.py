@@ -154,7 +154,7 @@ class GritsEggStore(GritsClientStore):
 
 
 def get_default_remote(prefixes):
-    def _remote_store():
+    def _website_store():
         web_url = enstaller.config.read()['webservice_entry_point']
         local_dir = get_writable_local_dir(prefixes[0])
         return RemoteHTTPIndexedStore(web_url, local_dir)
@@ -164,9 +164,9 @@ def get_default_remote(prefixes):
         if requests.get(grits_url + '/available').status_code == 200:
             return GritsEggStore(grits_url)
         else:
-            return _remote_store()
+            return _website_store()
     except:
-        return _remote_store()
+        return _website_store()
 
 
 class Enpkg(object):
