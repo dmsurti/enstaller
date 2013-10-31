@@ -140,7 +140,7 @@ class Resolve(object):
         return True if the 'eggs' are complete, i.e. the for each egg all
         dependencies (by name only) are also included in 'eggs'
         """
-        names = set(map(self.egg_name, eggs))
+        names = {self.egg_name(egg) for egg in eggs}
         for egg in eggs:
             for req in self.egg_reqs(egg):
                 if req.name not in names:

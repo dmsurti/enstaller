@@ -4,13 +4,13 @@ import requests
 from uuid import uuid4
 from os.path import isdir, isfile, join
 import os
-import plat
 import threading
 
 import enstaller
 import config
 
 from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore
+from store.grits_egg_store import GritsEggStore
 from store.joined import JoinedStore
 
 from eggcollect import EggCollection, JoinedEggCollection
@@ -19,8 +19,6 @@ from resolve import Req, Resolve, comparable_info
 from fetch import FetchAPI
 from egg_meta import is_valid_eggname, split_eggname
 from history import History
-
-from grits_client.storage.client_store import GritsClientStore
 
 
 # Included for backward compatibility
@@ -110,49 +108,6 @@ class EnpkgError(Exception):
     req = None
 
 
-class GritsEggStore(GritsClientStore):
-    def __init__(self, url):
-        super(GritsEggStore, self).__init__(url)
-        self.metadata_cache = {}
-
-    def query(self, **kwargs):
-        kwargs['platform'] = plat.custom_plat
-        ret = [(self.egg_name(k), self._default_metadata(v))
-               for k, v in super(GritsEggStore, self).query(**kwargs)]
-        self.metadata_cache.update(dict(ret))
-        return ret
-
-    def get(self, egg):
-        return super(GritsEggStore, self).get(self.key_name(egg))
-
-    def get_data(self, egg):
-        return super(GritsEggStore, self).get_data(self.key_name(egg))
-
-    def get_metadata(self, egg):
-        if egg in self.metadata_cache:
-            return self.metadata_cache[egg]
-        else:
-            metadata = self._default_metadata(super(GritsEggStore, self).
-                                              get_metadata(self.key_name(egg)))
-            self.metadata_cache[egg] = metadata
-            return metadata
-
-    @staticmethod
-    def _default_metadata(metadata):
-        metadata.setdefault('type', 'egg')
-        metadata.setdefault('python', '2.7')
-        metadata.setdefault('packages', [])
-        return metadata
-
-    @staticmethod
-    def egg_name(key):
-        return key.split('/')[-1]
-
-    @staticmethod
-    def key_name(egg):
-        return 'enthought/eggs/{}/{}'.format(plat.custom_plat, egg)
-
-
 def get_default_remote(prefixes):
     def _website_store():
         web_url = enstaller.config.read()['webservice_entry_point']
@@ -161,7 +116,7 @@ def get_default_remote(prefixes):
 
     grits_url = enstaller.config.read()['query_entry_point']
     try:
-        if requests.get(grits_url + '/available').status_code == 200:
+        if grits_url and requests.get(grits_url + '/available').status_code == 200:
             return GritsEggStore(grits_url)
         else:
             return _website_store()

@@ -51,7 +51,7 @@ default = dict(
     autoupdate = True,
     IndexedRepos=[],
     webservice_entry_point=get_default_url(),
-    query_entry_point='https://grits.enthought.com/api'
+    query_entry_point=None,
 )
 
 def get_path():
