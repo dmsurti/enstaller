@@ -158,7 +158,9 @@ def infos_by_name(infos):
     for info in infos:
         info_dict[info['name']].append(info)
 
-    return {k: sorted(v, key=comparable_info) for k, v in info_dict.iteritems()}
+    for k, v in info_dict.iteritems():
+        info_dict[k] = sorted(v, key=comparable_info)
+    return info_dict
 
 def search(enpkg, pat=None):
     """
@@ -172,8 +174,14 @@ def search(enpkg, pat=None):
     print 80 * '='
 
     all = list(enpkg.query_remote())
-    names = {info['name']: egg_name(key) for key, info in all}
-    installed = {info['name']: VB_FMT % info for _, info in enpkg.query_installed()}
+
+    names = {}
+    for key, info in all:
+        names[info['name']] = egg_name(key)
+
+    installed = {}
+    for _, info in enpkg.query_installed():
+        installed[info['name']] = VB_FMT % info
 
     infos = infos_by_name(info for _, info in all)
 

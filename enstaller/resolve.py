@@ -127,7 +127,7 @@ class Resolve(object):
         """
         return the set of requirement objects listed by the given egg
         """
-        return {Req(pkg) for pkg in self.repo.get_metadata(egg)['packages']}
+        return set(Req(pkg) for pkg in self.repo.get_metadata(egg)['packages'])
 
     def egg_name(self, egg):
         """
@@ -140,7 +140,7 @@ class Resolve(object):
         return True if the 'eggs' are complete, i.e. the for each egg all
         dependencies (by name only) are also included in 'eggs'
         """
-        names = {self.egg_name(egg) for egg in eggs}
+        names = set(self.egg_name(egg) for egg in eggs)
         for egg in eggs:
             for req in self.egg_reqs(egg):
                 if req.name not in names:
@@ -207,7 +207,10 @@ class Resolve(object):
         return eggs
 
     def _sequence_recur(self, root):
-        reqs_shallow = {r.name: r for r in self.egg_reqs(root)}
+        reqs_shallow = {}
+        for r in self.egg_reqs(root):
+            reqs_shallow[r.name] = r
+
         reqs_deep = defaultdict(set)
 
         def add_dependents(egg, visited=None):
@@ -232,10 +235,10 @@ class Resolve(object):
                 if not dep in visited:
                     add_dependents(dep, visited)
 
-        eggs = {root}
+        eggs = set([root])
         add_dependents(root)
 
-        names = {self.egg_name(egg) for egg in eggs}
+        names = set(self.egg_name(egg) for egg in eggs)
         if len(eggs) != len(names):
             for name in names:
                 ds = [d for d in eggs if self.egg_name(d) == name]
