@@ -5,17 +5,16 @@ from encore.storage.dynamic_url_store import DynamicURLStore
 
 from enstaller import plat
 
+
 class GritsClientStore(DynamicURLStore):
-    ''' Copied from grits_client.storage.client_store '''
-    def __init__(self, url):
-        self.url = clean_url(url)
+    def __init__(self, url, session=None):
+        self.url = self._clean_url(url)
         base_url = self.url + '/store'
         super(GritsClientStore, self).__init__(base_url, base_url)
         self.authenticated = False
+        self._session = session or requests.Session()
 
     def connect(self, creds):
-        self._session = requests.Session()
-
         if creds is not None:
             username, password = creds
             response = self._session.post(self.url + '/authenticate',
@@ -24,13 +23,9 @@ class GritsClientStore(DynamicURLStore):
 
             response.raise_for_status()
             self.user_data = response.json()
-            self._user_tag = self.user_data['user_tag']
             self.authenticated = True
 
         self._connected = True
-
-    def is_connected(self):
-        return self._connected
 
     def add_action(self, user_id, action_type, action_time, **details):
         action_dict = {"user_id": user_id,
@@ -42,35 +37,41 @@ class GritsClientStore(DynamicURLStore):
                            data=action_dict) \
                      .raise_for_status()
 
-    def query(self, select=None, since=None, **kwargs):
+    def query(self, **kwargs):
+        index = {}
+        for space in self._user_spaces():
+            index.update(self._query_space(space, **kwargs))
+        return index.items()
+
+    @staticmethod
+    def _clean_url(url):
+        url = url.rstrip('/')
+        if not url.endswith('/api'):
+            url += '/api'
+        return url
+
+    def _query_space(self, space, select=None, since=None, **kwargs):
         params = {key: json.dumps(value) for key, value in kwargs.items()}
         params['_with_metadata'] = 'true'
         headers = {'Content-type': 'application/json'}
+
         if since:
             headers['If-Modified-Since'] = formatdate(since)
 
-        response = self._session.get(self.query_url, headers=headers, params=params)
+        response = self._session.get(self.query_url + '/' + space,
+                                     headers=headers,
+                                     params=params)
         response.raise_for_status()
 
         body = response.json()
         if select:
-            ret = {}
-            for key, metadata in body.iteritems():
-                ret[key] = {}
-                for k, v in metadata.iteritems():
-                    if k in select:
-                        ret[key][k] = v
-            return ret
+            return [(key, {k: metadata[k] for k in metadata if k in select}) \
+                    for key, metadata in body.iteritems()]
         else:
             return body.items()
 
-    @property
-    def user_store(self):
-        return self.user_data['stores'][0]
-
-    @property
-    def user_spaces(self):
-        return self.user_store['user_spaces']
+    def _user_spaces(self):
+        return self.user_data['stores'][0]['user_spaces']
 
 
 class GritsEggStore(GritsClientStore):
