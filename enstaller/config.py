@@ -51,9 +51,8 @@ default = dict(
     use_webservice=True,
     autoupdate = True,
     IndexedRepos=[],
-    webservice_entry_point=get_default_url(),
-    DYNAMIC_STORE_ENTRY_POINT_KEY=None,
-)
+    webservice_entry_point=get_default_url())
+default[DYNAMIC_STORE_ENTRY_POINT_KEY] = None
 
 def get_path():
     """
