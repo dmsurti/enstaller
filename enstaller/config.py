@@ -31,6 +31,7 @@ except (ImportError, KeyError):
     keyring = None
 
 KEYRING_SERVICE_NAME = 'Enthought.com'
+DYNAMIC_STORE_ENTRY_POINT_KEY = "query_entry_point"
 
 config_fn = ".enstaller4rc"
 home_config_path = abs_expanduser("~/" + config_fn)
@@ -51,7 +52,7 @@ default = dict(
     autoupdate = True,
     IndexedRepos=[],
     webservice_entry_point=get_default_url(),
-    query_entry_point=None,
+    DYNAMIC_STORE_ENTRY_POINT_KEY=None,
 )
 
 def get_path():
@@ -455,6 +456,11 @@ def read():
 def get(key, default=None):
     return read().get(key, default)
 
+def use_dynamic_store():
+    return read()[DYNAMIC_STORE_ENTRY_POINT_KEY] is not None
+
+def get_dynamic_store_entry_point():
+    return read()[DYNAMIC_STORE_ENTRY_POINT_KEY]
 
 def print_config(remote, prefix):
     print "Python version:", PY_VER
@@ -471,6 +477,12 @@ def print_config(remote, prefix):
     print "    IndexedRepos:", '(not used)' if get('use_webservice') else ''
     for repo in get('IndexedRepos'):
         print '        %r' % repo
+
+
+    if use_dynamic_store():
+        print "    Use dynamic store"
+    else:
+        print "    Use static index"
 
     username, password = get_auth()
     user = {}

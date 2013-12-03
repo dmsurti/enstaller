@@ -114,13 +114,14 @@ def get_default_remote(prefixes):
         local_dir = get_writable_local_dir(prefixes[0])
         return RemoteHTTPIndexedStore(web_url, local_dir)
 
-    grits_url = enstaller.config.read()['query_entry_point']
-    try:
-        if grits_url and requests.get(grits_url + '/available').status_code == 200:
-            return GritsEggStore(grits_url)
-        else:
+    if enstaller.config.use_grits():
+        try:
+            url = enstaller.config.get_dynamic_store_entry_point() + \
+                    "/available"
+            return requests.get(url).status_code == 200
+        except Exception:
             return _website_store()
-    except:
+    else:
         return _website_store()
 
 
