@@ -4,12 +4,14 @@ from unittest import TestCase
 from ..grits_egg_store import GritsClientStore
 
 class MockGritsResponse():
-        def __init__(self, data):
-            self.data = data
-        def json(self):
-            return json.loads(self.data)
-        def raise_for_status(self):
-            return None
+    def __init__(self, data):
+        self.data = data
+
+    def json(self):
+        return json.loads(self.data)
+
+    def raise_for_status(self):
+        return None
 
 class MockGritsServer():
     def __init__(self, url):
