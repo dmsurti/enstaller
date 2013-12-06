@@ -1,7 +1,7 @@
 coverage
 -e git+https://github.com/enthought/machotools#egg=machotools
 -e git+https://github.com/enthought/appinst#egg=appinst
-https://github.com/enthought/encore/archive/0.4.0.tar.gz#encore
 mock
 nose
+nose-exclude
 requests==2.0.1

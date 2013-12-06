@@ -1,7 +1,7 @@
 import requests
 import json
 
-from encore.storage.dynamic_url_store import DynamicURLStore
+from enstaller.bundled.encore.storage.dynamic_url_store import DynamicURLStore
 
 from enstaller import plat
 
