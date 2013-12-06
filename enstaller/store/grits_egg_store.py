@@ -1,5 +1,6 @@
-import requests
 import json
+
+from enstaller.bundled import requests
 
 from enstaller.bundled.encore.storage.dynamic_url_store import DynamicURLStore
 

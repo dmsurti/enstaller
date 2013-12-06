@@ -1,6 +1,5 @@
 import sys
 import warnings
-import requests
 from uuid import uuid4
 from os.path import isdir, isfile, join
 import os
@@ -8,6 +7,8 @@ import threading
 
 import enstaller
 import config
+
+from enstaller.bundled import requests
 
 from store.indexed import LocalIndexedStore, RemoteHTTPIndexedStore
 from store.grits_egg_store import GritsEggStore

@@ -4,4 +4,3 @@ coverage
 mock
 nose
 nose-exclude
-requests==2.0.1

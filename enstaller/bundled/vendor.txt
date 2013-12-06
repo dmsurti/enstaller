@@ -1,1 +1,2 @@
-git+ssh://git@github.com/cournape/encore@3b6ef132b48dd1508f4548a030ad471cb1419a99#egg=encore
+requests==2.0.1
+git+ssh://git@github.com/cournape/encore@29d32b323777099917a6d7a3ced3f054d5a09bad#egg=encore
