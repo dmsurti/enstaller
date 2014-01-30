@@ -1,10 +1,12 @@
+import logging
 import os
-import sys
-import re
 from os.path import abspath, basename, join, isdir, isfile, islink
+import re
+import sys
 
 from egginst.utils import on_win, rm_rf
 
+logger = logging.getLogger(__name__)
 
 verbose = False
 hashbang_pat = re.compile(r'#!.+$', re.M)
@@ -59,7 +61,7 @@ def create_proxy(src, bin_dir):
     create a proxy of src in bin_dir (Windows only)
     """
     if verbose:
-        print "Creating proxy executable to: %r" % src
+        logger.info("Creating proxy executable to: %r" % src)
     assert src.endswith('.exe')
 
     dst_name = basename(src)
@@ -95,7 +97,7 @@ def create_proxies(egg):
     for line in egg.lines_from_arcname('EGG-INFO/inst/files_to_install.txt'):
         arcname, action = line.split()
         if verbose:
-            print "arcname=%r    action=%r" % (arcname, action)
+            logger.info("arcname=%r    action=%r" % (arcname, action))
 
         if action == 'PROXY':
             ei = 'EGG-INFO/'
@@ -104,13 +106,13 @@ def create_proxies(egg):
             else:
                 src = abspath(join(egg.prefix, arcname))
             if verbose:
-                print "     src: %r" % src
+                logger.info("     src: %r" % src)
             egg.files.extend(create_proxy(src, egg.bin_dir))
         else:
             data = egg.z.read(arcname)
             dst = abspath(join(egg.prefix, action, basename(arcname)))
             if verbose:
-                print "     dst: %r" % dst
+                logger.info("     dst: %r" % dst)
             rm_rf(dst)
             fo = open(dst, 'wb')
             fo.write(data)
@@ -123,7 +125,7 @@ def write_script(path, entry_pt, egg_name):
     Write an entry point script to path.
     """
     if verbose:
-        print 'Creating script: %s' % path
+        logger.info('Creating script: %s' % path)
 
     assert entry_pt.count(':') == 1
     module, func = entry_pt.strip().split(':')
@@ -195,7 +197,7 @@ def fix_script(path):
     if new_data == data:
         return
     if verbose:
-        print "Updating: %r" % path
+        logger.info("Updating: %r" % path)
     fo = open(path, 'w')
     fo.write(new_data)
     fo.close()

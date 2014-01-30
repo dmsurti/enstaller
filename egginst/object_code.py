@@ -1,9 +1,11 @@
 # Changes library path in object code (ELF and Mach-O).
 
+import logging
 import sys
 import re
 from os.path import abspath, join, islink, isfile, exists
 
+logger = logging.getLogger(__name__)
 
 verbose = False
 
@@ -48,7 +50,7 @@ def find_lib(fn):
         dst = abspath(join(tgt, fn))
         if exists(dst):
             return dst
-    print "ERROR: library %r not found" % fn
+    logger.error("ERROR: library %r not found" % fn)
     return join('/ERROR/path/not/found', fn)
 
 
@@ -125,7 +127,7 @@ def fix_object_code(path):
         return
 
     if verbose:
-        print "Fixing placeholders in:", path
+        logger.info("Fixing placeholders in:", path)
     for m in matches:
         rest = m.group(1)
         original_r = rest
@@ -146,7 +148,7 @@ def fix_object_code(path):
             r = ':'.join(rpaths)
 
         if verbose:
-            print "replacing rpath {} with {}".format(original_r, r)
+            logger.info("replacing rpath {} with {}".format(original_r, r))
         if alt_replace_func is not None:
             r = alt_replace_func(r)
 
@@ -175,9 +177,9 @@ def fix_files(egg):
         _targets.append(join(prefix, 'lib'))
 
     if verbose:
-        print 'Target directories:'
+        logger.info('Target directories:')
         for tgt in _targets:
-            print '    %r' % tgt
+            logger.info('    %r' % tgt)
 
     for p in egg.files:
         fix_object_code(p)

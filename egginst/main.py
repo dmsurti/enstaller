@@ -7,21 +7,26 @@ package needs to be uninstalled prior to the install, and so on.  Those tasks
 are responsibilities of a package manager, e.g. enpkg.  You just give it
 eggs and it installs/uninstalls them.
 """
-import os
-import sys
-import re
 import json
+import logging
+import os
+from os.path import abspath, basename, dirname, join, isdir, isfile, sep
+import re
 import shutil
+from subprocess import check_output, STDOUT, CalledProcessError
+import sys
+from uuid import uuid4
 import warnings
 import zipfile
-from uuid import uuid4
-from os.path import abspath, basename, dirname, join, isdir, isfile, sep
 
-import eggmeta
-import scripts
+import egginst.eggmeta as eggmeta
+import egginst.scripts as scripts
 
-from utils import (on_win, bin_dir_name, rel_site_packages, human_bytes, ensure_dir,
-                   rm_empty_dir, rm_rf, get_executable, makedirs, is_zipinfo_symlink)
+from egginst.utils import (on_win, bin_dir_name, rel_site_packages, human_bytes,
+                           ensure_dir, rm_empty_dir, rm_rf, get_executable,
+                           makedirs, is_zipinfo_symlink)
+
+logger = logging.getLogger(__name__)
 
 NS_PKG_PAT = re.compile(
     r'\s*__import__\([\'"]pkg_resources[\'"]\)\.declare_namespace'
@@ -176,7 +181,7 @@ class EggInst(object):
         if ('console_scripts' in conf.sections() or
                 'gui_scripts' in conf.sections()):
             if self.verbose:
-                print 'creating scripts'
+                logger.info('creating scripts')
                 scripts.verbose = True
             scripts.create(self, conf)
 
@@ -392,7 +397,7 @@ class EggInst(object):
         try:
             _install_app()
         except Exception, e:
-            print("Warning (%sinstalling application item):\n%r" %
+            logger.error("Warning (%sinstalling application item):\n%r" %
                   ('un' if remove else '', e))
 
 
@@ -400,9 +405,13 @@ class EggInst(object):
         path = join(self.meta_dir, fn)
         if not isfile(path):
             return
-        from subprocess import call
-        call([sys.executable, '-E', path, '--prefix', self.prefix],
-             cwd=dirname(path))
+        try:
+            output = check_output([sys.executable, '-E', path, '--prefix', self.prefix],
+             cwd=dirname(path), stderr=STDOUT)
+        except CalledProcessError as exc:
+            logger.error(exc.output)
+        else:
+            logger.info(output)
 
 
     def rm_dirs(self):
@@ -419,7 +428,7 @@ class EggInst(object):
 
     def remove(self):
         if not isdir(self.meta_dir):
-            print "Error: Can't find meta data for:", self.cname
+            logger.error("Error: Can't find meta data for:", self.cname)
             return
 
         if self.evt_mgr:
@@ -491,6 +500,9 @@ def print_installed(prefix=sys.prefix):
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
+
+    # Sets up basic logging for the library
+    logging.basicConfig(level=logging.INFO)
 
     from optparse import OptionParser
 

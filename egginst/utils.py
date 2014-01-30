@@ -1,11 +1,14 @@
 import errno
-import sys
+import logging
 import os
+import sys
 import shutil
 import tempfile
 import zipfile
 
 from os.path import basename, isdir, isfile, islink, join
+
+logger = logging.getLogger(__name__)
 
 if sys.version_info[:2] < (2, 7):
     class ZipFile(zipfile.ZipFile):
@@ -45,12 +48,12 @@ def rm_rf(path, verbose=False):
         # exists('/path/to/dead-link') will return False, although
         # islink('/path/to/dead-link') is True.
         if verbose:
-            print "Removing: %r (link)" % path
+            logger.info("Removing: %r (link)" % path)
         os.unlink(path)
 
     elif isfile(path):
         if verbose:
-            print "Removing: %r (file)" % path
+            logger.info("Removing: %r (file)" % path)
         if on_win:
             try:
                 os.unlink(path)
@@ -61,7 +64,7 @@ def rm_rf(path, verbose=False):
 
     elif isdir(path):
         if verbose:
-            print "Removing: %r (directory)" % path
+            logger.info("Removing: %r (directory)" % path)
         if on_win:
             try:
                 shutil.rmtree(path)

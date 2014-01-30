@@ -29,6 +29,26 @@ get_installed(prefix):
     Each element is the filename of the egg which was used to install the
     package.
 """
+
+# Add a NullHandler so 'egginst' loggers don't complain when they get used.
+import logging
+
+class NullHandler(logging.Handler):
+
+    def handle(self, record):
+        pass
+
+    def emit(self, record):
+        pass
+
+    def createLock(self):
+        self.lock = None
+
+logger = logging.getLogger(__name__)
+logger.addHandler(NullHandler())
+
+del logging, logger, NullHandler
+
 import os.path
 
 from egginst.main import EggInst, get_installed, name_version_fn
