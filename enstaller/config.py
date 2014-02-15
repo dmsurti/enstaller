@@ -1,6 +1,8 @@
 # Copyright by Enthought, Inc.
 # Author: Ilan Schnell <ischnell@enthought.com>
 
+import _ast
+import ast
 import json
 import re
 import os
@@ -69,6 +71,27 @@ system_config_path = join(sys.prefix, config_fn)
 def get_default_url():
     import plat
     return 'https://api.enthought.com/eggs/%s/' % plat.custom_plat
+
+class PythonConfigurationParser(ast.NodeVisitor):
+    def __init__(self):
+        self._data = {}
+
+    def parse(self, s):
+        self._data.clear()
+
+        root = ast.parse(s)
+        self.visit(root)
+        return self._data
+
+    def generic_visit(self, node):
+        if type(node) != _ast.Module:
+            raise ValueError("Unexpected expression @ line {0}".format(node.lineno))
+        super(PythonConfigurationParser, self).generic_visit(node)
+
+    def visit_Assign(self, node):
+        value = ast.literal_eval(node.value)
+        for target in node.targets:
+            self._data[target.id] = value
 
 default = dict(
     prefix=sys.prefix,
@@ -452,7 +475,12 @@ def read():
     if path is None:
         return read.cache
 
-    execfile(path, read.cache)
+    parser = PythonConfigurationParser()
+
+    with open(path, "rt") as fp:
+        data = fp.read()
+    read.cache.update(parser.parse(data))
+
     for k in read.cache:
         v = read.cache[k]
         if k == 'IndexedRepos':
