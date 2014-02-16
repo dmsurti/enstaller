@@ -3,6 +3,7 @@
 
 import _ast
 import ast
+import copy
 import json
 import re
 import os
@@ -62,7 +63,6 @@ else:
             keyring = None
 
 KEYRING_SERVICE_NAME = 'Enthought.com'
-REPOSITORY_CACHE_CONFIG_NAME = "repository_cache"
 
 config_fn = ".enstaller4rc"
 home_config_path = abs_expanduser("~/" + config_fn)
@@ -93,18 +93,95 @@ class PythonConfigurationParser(ast.NodeVisitor):
         for target in node.targets:
             self._data[target.id] = value
 
-default = dict(
-    prefix=sys.prefix,
-    proxy=None,
-    noapp=False,
-    local=join(sys.prefix, 'LOCAL-REPO'),
-    EPD_auth=None,
-    EPD_userpass=None,
-    use_webservice=True,
-    autoupdate = True,
-    IndexedRepos=[],
-    webservice_entry_point=get_default_url(),
-)
+class Configuration(object):
+    __keys = (
+        'prefix',
+        'proxy',
+        'noapp',
+        'EPD_auth',
+        'EPD_username',
+        'use_webservice',
+        'autoupdate',
+        'IndexedRepos',
+        'webservice_entry_point',
+        'repository_cache',
+        'local',
+    )
+
+    def __init__(self):
+        self.proxy = None
+        self.noapp = False
+        self.EPD_auth = None
+        self.EPD_username = None
+        self.use_webservice = True
+        self.autoupdate =  True
+
+        self._prefix = sys.prefix
+        self._local = join(sys.prefix, 'LOCAL-REPO')
+        self._IndexedRepos = []
+        self._webservice_entry_point = fill_url(get_default_url())
+
+        self.repository_cache = self.local
+
+    @property
+    def local(self):
+        return self._local
+
+    @local.setter
+    def local(self, value):
+        self._local = abs_expanduser(value)
+
+    @property
+    def prefix(self):
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, value):
+        self._prefix = abs_expanduser(value)
+
+    @property
+    def IndexedRepos(self):
+        return self._IndexedRepos
+
+    @IndexedRepos.setter
+    def IndexedRepos(self, urls):
+        self._IndexedRepos = [fill_url(url) for url in urls]
+
+    @property
+    def webservice_entry_point(self):
+        return self._webservice_entry_point
+
+    @webservice_entry_point.setter
+    def webservice_entry_point(self, url):
+        self._webservice_entry_point = fill_url(url)
+
+    # FIXME: temporary dict protocol emulation as a backward compatibility
+    # shim
+    def copy(self):
+        return copy.copy(self)
+
+    def update(self, data):
+        for k in data:
+            if k in self.__keys:
+                setattr(self, k, data[k])
+            else:
+                raise KeyError("Invalid key: {0}".format(k))
+
+    def get(self, k, default=None):
+        return self[k]
+
+    def __getitem__(self, k):
+        if k in self.__keys:
+            return getattr(self, k)
+        else:
+            raise KeyError("Invalid key: {0}".format(k))
+
+    def __iter__(self):
+        return iter(self.__keys)
+
+    @property
+    def _dict(self):
+        return dict((k, self[k]) for k in self.__keys)
 
 def get_path():
     """
@@ -471,30 +548,20 @@ def read():
         return read.cache
 
     path = get_path()
-    read.cache = default.copy()
     if path is None:
+        read.cache = Configuration()
+        return read.cache
+    else:
+        config = Configuration()
+        parser = PythonConfigurationParser()
+        with open(path, "rt") as fp:
+            data = fp.read()
+        config.update(parser.parse(data))
+        read.cache = config
         return read.cache
 
-    parser = PythonConfigurationParser()
-
-    with open(path, "rt") as fp:
-        data = fp.read()
-    read.cache.update(parser.parse(data))
-
-    for k in read.cache:
-        v = read.cache[k]
-        if k == 'IndexedRepos':
-            read.cache[k] = [fill_url(url) for url in v]
-        elif k in ('prefix', 'local'):
-            read.cache[k] = abs_expanduser(v)
-        elif k == 'webservice_entry_point':
-            read.cache[k] = fill_url(v)
-        elif k == REPOSITORY_CACHE_CONFIG_NAME:
-            read.cache[k] = v
-    return read.cache
-
 def get_repository_cache(prefix):
-    return get(REPOSITORY_CACHE_CONFIG_NAME, join(prefix, "LOCAL-REPO"))
+    return get("repository_cache")
 
 def get(key, default=None):
     return read().get(key, default)

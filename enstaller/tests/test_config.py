@@ -2,6 +2,7 @@ import json
 import os.path
 import sys
 import tempfile
+import textwrap
 import urllib2
 
 from cStringIO import StringIO
@@ -18,6 +19,7 @@ import enstaller.config
 from enstaller.config import AuthFailedError, authenticate, change_auth, \
     clear_cache, get, get_auth, get_default_url, get_path, input_auth, \
     is_auth_configured, subscription_level, web_auth, write
+from enstaller.config import PythonConfigurationParser
 
 from .common import patched_read
 
@@ -444,3 +446,18 @@ class TestAuthenticationConfiguration(unittest.TestCase):
         with mock.patch("enstaller.config.keyring", mocked_keyring):
             with mock.patch("enstaller.config.get_path", lambda: fp.name):
                 self.assertTrue(is_auth_configured())
+
+class TestConfigurationParsing(unittest.TestCase):
+    def test_parse_simple(self):
+        r_data = {"IndexedRepos": ["http://acme.com/{SUBDIR}"],
+                  "webservice_entry_point": "http://acme.com/eggs/{PLATFORM}/"}
+
+        s = textwrap.dedent("""\
+        IndexedRepos = [
+            "http://acme.com/{SUBDIR}",
+        ]
+        webservice_entry_point = "http://acme.com/eggs/{PLATFORM}/"
+        """)
+
+        data = PythonConfigurationParser().parse(s)
+        self.assertEqual(data, r_data)

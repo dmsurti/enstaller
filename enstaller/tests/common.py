@@ -15,7 +15,7 @@ from enstaller.utils import PY_VER
 
 def patched_read(**kw):
     config = {}
-    config.update(enstaller.config.default)
+    config.update(enstaller.config.Configuration()._dict)
     config.update(**kw)
     return config
 
