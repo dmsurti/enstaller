@@ -78,17 +78,9 @@ class MetaOnlyEggCollection(AbstractEggCollection):
 
 # Decorators to force a certain configuration
 def is_authenticated(f):
-    return mock.patch("enstaller.config.authenticate",
+    return mock.patch("enstaller.main.authenticate",
                       lambda ignored: {"is_authenticated": True})(f)
 
 def is_not_authenticated(f):
-    return mock.patch("enstaller.config.authenticate",
+    return mock.patch("enstaller.main.authenticate",
                       lambda ignored: {"is_authenticated": False})(f)
-
-def use_webservice(f):
-    return mock.patch("enstaller.config.read",
-                      lambda: patched_read(use_webservice=True))(f)
-
-def dont_use_webservice(f):
-    return mock.patch("enstaller.config.read",
-                      lambda: patched_read(use_webservice=False))(f)

@@ -20,6 +20,7 @@ from egginst.main import EggInst
 from egginst.tests.common import mkdtemp, DUMMY_EGG, NOSE_1_2_1, NOSE_1_3_0
 from egginst.utils import makedirs
 
+from enstaller.config import Configuration
 from enstaller.egg_meta import split_eggname
 from enstaller.eggcollect import EggCollection, JoinedEggCollection
 from enstaller.enpkg import Enpkg, EnpkgError
@@ -40,11 +41,11 @@ def catch_warning_for_tests():
         yield w
 
 class TestMisc(unittest.TestCase):
-    @mock.patch("enstaller.config.read",
-                lambda: patched_read(webservice_entry_point="http://acme.com"))
     def test_get_default_kvs(self):
-        store = get_default_kvs()
-        self.assertEqual(store.root, "http://acme.com")
+        config = Configuration()
+        config.webservice_entry_point = "http://acme.com"
+        store = get_default_kvs(config)
+        self.assertEqual(store.root, "http://acme.com/")
 
     def test_req_from_anything_egg_string(self):
         req_string = "numpy-1.8.0-1.egg"
@@ -142,17 +143,20 @@ class TestMisc(unittest.TestCase):
                                  format(site_packages[0]))
 
     def test_writable_local_dir_writable(self):
+        config = Configuration()
         with mkdtemp() as d:
-            with mock.patch("enstaller.enpkg.get_repository_cache", lambda x: x):
-                self.assertEqual(get_writable_local_dir(d), d)
+            config.repository_cache = d
+            self.assertEqual(get_writable_local_dir(config), d)
 
     def test_writable_local_dir_non_writable(self):
         fake_dir = "/some/dummy_dir/hopefully/doesnt/exists"
-        with mock.patch("enstaller.enpkg.get_repository_cache", lambda x: fake_dir):
-            def mocked_makedirs(d):
-                raise OSError("mocked makedirs")
-            with mock.patch("os.makedirs", mocked_makedirs):
-                self.assertNotEqual(get_writable_local_dir("/foo"), "/foo")
+
+        config = Configuration()
+        config.repository_cache = fake_dir
+        def mocked_makedirs(d):
+            raise OSError("mocked makedirs")
+        with mock.patch("os.makedirs", mocked_makedirs):
+            self.assertNotEqual(get_writable_local_dir(config), "/foo")
 
 class TestEnstallerUpdateHack(unittest.TestCase):
     def test_scenario1(self):

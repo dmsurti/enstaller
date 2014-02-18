@@ -3,11 +3,13 @@
 
 import _ast
 import ast
+import base64
 import copy
 import json
 import re
 import os
 import sys
+import textwrap
 import platform
 import urllib2
 
@@ -15,7 +17,7 @@ from getpass import getpass
 from os.path import isfile, join
 
 from enstaller import __version__
-from enstaller.errors import AuthFailedError, InvalidConfiguration
+from enstaller.errors import AuthFailedError, EnstallerException, InvalidConfiguration
 from utils import PY_VER, abs_expanduser, fill_url
 
 def __import_new_keyring():
@@ -93,123 +95,6 @@ class PythonConfigurationParser(ast.NodeVisitor):
         for target in node.targets:
             self._data[target.id] = value
 
-class Configuration(object):
-    __keys = (
-        'prefix',
-        'proxy',
-        'noapp',
-        'EPD_auth',
-        'EPD_username',
-        'use_webservice',
-        'autoupdate',
-        'IndexedRepos',
-        'webservice_entry_point',
-        'repository_cache',
-        'local',
-    )
-
-    def __init__(self):
-        self.proxy = None
-        self.noapp = False
-        self.EPD_auth = None
-        self.EPD_username = None
-        self.use_webservice = True
-        self.autoupdate =  True
-
-        self._prefix = sys.prefix
-        self._local = join(sys.prefix, 'LOCAL-REPO')
-        self._IndexedRepos = []
-        self._webservice_entry_point = fill_url(get_default_url())
-
-        self.repository_cache = self.local
-
-    @property
-    def local(self):
-        return self._local
-
-    @local.setter
-    def local(self, value):
-        self._local = abs_expanduser(value)
-
-    @property
-    def prefix(self):
-        return self._prefix
-
-    @prefix.setter
-    def prefix(self, value):
-        self._prefix = abs_expanduser(value)
-
-    @property
-    def IndexedRepos(self):
-        return self._IndexedRepos
-
-    @IndexedRepos.setter
-    def IndexedRepos(self, urls):
-        self._IndexedRepos = [fill_url(url) for url in urls]
-
-    @property
-    def webservice_entry_point(self):
-        return self._webservice_entry_point
-
-    @webservice_entry_point.setter
-    def webservice_entry_point(self, url):
-        self._webservice_entry_point = fill_url(url)
-
-    # FIXME: temporary dict protocol emulation as a backward compatibility
-    # shim
-    def copy(self):
-        return copy.copy(self)
-
-    def update(self, data):
-        for k in data:
-            if k in self.__keys:
-                setattr(self, k, data[k])
-            else:
-                raise KeyError("Invalid key: {0}".format(k))
-
-    def get(self, k, default=None):
-        return self[k]
-
-    def __getitem__(self, k):
-        if k in self.__keys:
-            return getattr(self, k)
-        else:
-            raise KeyError("Invalid key: {0}".format(k))
-
-    def __iter__(self):
-        return iter(self.__keys)
-
-    @property
-    def _dict(self):
-        return dict((k, self[k]) for k in self.__keys)
-
-def get_path():
-    """
-    Return the absolute path to the config file.
-    """
-    if isfile(home_config_path):
-        return home_config_path
-    if isfile(system_config_path):
-        return system_config_path
-    return None
-
-
-def input_auth():
-    """
-    Prompt user for username and password.  Return (username, password)
-    tuple or (None, None) if left blank.
-    """
-    print """\
-Please enter the email address (or username) and password for your
-EPD or EPD Free subscription.  If you are not subscribed to EPD,
-just press Enter.
-"""
-    username = raw_input('Email (or username): ').strip()
-    if not username:
-        return None, None
-    return username, getpass('Password: ')
-
-
 RC_TMPL = """\
 # enstaller configuration file
 # ============================
@@ -271,58 +156,259 @@ IndexedRepos = [
 """
 
 
-def write(username=None, password=None, proxy=None):
-    """
-    Write the config file.
-    """
-    # If user is 'root', then always create the config file in sys.prefix,
-    # otherwise in the user's HOME directory.
-    if sys.platform != 'win32' and os.getuid() == 0:
-        path = system_config_path
-    else:
-        path = home_config_path
-
-    if username is None and password is None:
-        username, password = input_auth()
-    if username and password:
-        if keyring:
-            keyring.set_password(KEYRING_SERVICE_NAME, username, password)
-            authline = 'EPD_username = %r' % username
+class Configuration(object):
+    @classmethod
+    def _get_default_config(cls):
+        config_filename = get_path()
+        if config_filename is not None:
+            return cls.from_file(config_filename)
         else:
-            auth = ('%s:%s' % (username, password)).encode('base64')
-            authline = 'EPD_auth = %r' % auth.strip()
-        auth_section = """
-# EPD subscriber authentication is required to access the EPD
-# repository.  To change your credentials, use the 'enpkg --userpass'
-# command, which will ask you for your email address (or username) and
-# password.
-%s
-""" % authline
-    else:
-        auth_section = ''
+            return cls()
 
-    py_ver = PY_VER
-    sys_prefix = sys.prefix
-    version = __version__
+    @classmethod
+    def from_file(cls, filename):
+        def _create(fp):
+            ret = cls()
+            for k, v in parser.parse(fp.read()).iteritems():
+                setattr(ret, k, v)
+            return ret
 
-    if proxy:
-        proxy_line = 'proxy = %r' % proxy
-    else:
-        proxy_line = ('#proxy = <proxy string>  '
-                      '# e.g. "http://<user>:<passwd>@123.0.1.2:8080"')
+        parser = PythonConfigurationParser()
+        if isinstance(filename, basestring):
+            with open(filename, "rt") as fp:
+                return _create(fp)
+        else:
+            return _create(fp)
 
-    fo = open(path, 'w')
-    fo.write(RC_TMPL % locals())
-    fo.close()
-    print "Wrote configuration file:", path
-    clear_cache()
+    def __init__(self):
+        self.proxy = None
+        self.noapp = False
+        self.EPD_auth = None
+        self.EPD_username = None
+        self.use_webservice = True
+        self.autoupdate =  True
+
+        self._prefix = sys.prefix
+        self._local = join(sys.prefix, 'LOCAL-REPO')
+        self._IndexedRepos = []
+        self._webservice_entry_point = fill_url(get_default_url())
+
+        self.repository_cache = self.local
+
+    def set_auth(self, username, password):
+        self.EPD_auth = None
+        self.EPD_username = None
+
+        if username is None or password is None:
+            raise InvalidConfiguration(
+                    "invalid authentication arguments: "
+                    "{0}:{1}".format(username, password))
+
+        if keyring:
+            self.EPD_username = username
+            keyring.set_password(KEYRING_SERVICE_NAME, username, password)
+        else:
+            self.EPD_auth = base64.encodestring('%s:%s' % (username, password))
+
+    def reset_auth(self):
+        if keyring and self.EPD_username is not None:
+            keyring.set_password(KEYRING_SERVICE_NAME, username, "")
+
+        self.EPD_auth = None
+        self.EPD_username = None
+
+    def get_auth(self):
+        old_auth = self.EPD_auth
+        if old_auth:
+            decoded_auth = old_auth.decode('base64')
+            parts = decoded_auth.split(":")
+            if len(parts) != 2:
+                raise InvalidConfiguration("Authentication string is corrupted")
+            else:
+                return tuple(parts)
+
+        username = self.EPD_username
+        if username:
+            password = None
+            if keyring:
+                password = keyring.get_password(KEYRING_SERVICE_NAME, username)
+            if password:
+                return username, password
+            else:
+                return None, None
+        else:
+            return None, None
+
+    def _default_filename(self):
+        if sys.platform != 'win32' and os.getuid() == 0:
+            return system_config_path
+        else:
+            return home_config_path
+
+    def write(self, filename=None):
+        if filename is None:
+            filename = self._default_filename()
+
+        username, password = self.get_auth()
+        if username and password:
+            if keyring:
+                authline = 'EPD_username = %r' % self.EPD_username
+            else:
+                authline = 'EPD_auth = %r' % self.EPD_auth.strip()
+            auth_section = textwrap.dedent("""
+            # EPD subscriber authentication is required to access the EPD
+            # repository.  To change your credentials, use the 'enpkg --userpass'
+            # command, which will ask you for your email address (or username) and
+            # password.
+            %s
+            """ % authline)
+        else:
+            auth_section = ''
+
+        py_ver = PY_VER
+        sys_prefix = sys.prefix
+        version = __version__
+
+        if self.proxy:
+            proxy_line = 'proxy = %r' % self.proxy
+        else:
+            proxy_line = ('#proxy = <proxy string>  '
+                          '# e.g. "http://<user>:<passwd>@123.0.1.2:8080"')
+
+        with open(filename, "wt") as fo:
+            fo.write(RC_TMPL % locals())
+
+    def _change_auth(self, filename=None):
+        if filename is None:
+            filename = self._default_filename()
+
+        # XXX: should we really just write the file in this case instead of
+        # erroring-out ?
+        if not os.path.isfile(filename):
+            self.write(filename)
+            return
+        else:
+            pat = re.compile(r'^(EPD_auth|EPD_username)\s*=.*$', re.M)
+            with open(filename, 'rt') as fi:
+                data = fi.read()
+
+            if not self.is_auth_configured:
+                if pat.search(data):
+                    data = pat.sub("", data)
+                with open(filename, 'wt') as fo:
+                    fo.write(data)
+                return
+
+            if keyring:
+                authline = 'EPD_username = %r' % self.EPD_username
+            else:
+                authline = 'EPD_auth = %r' % self.EPD_auth.strip()
+
+            if pat.search(data):
+                data = pat.sub(authline, data)
+            else:
+                lines = data.splitlines()
+                lines.append(authline)
+                data = '\n'.join(lines) + '\n'
+
+            with open(filename, 'wt') as fo:
+                fo.write(data)
+
+    def _checked_change_auth(self, filename=None, remote=None):
+        if not self.is_auth_configured:
+            raise InvalidConfiguration("No auth configured: cannot "
+                                       "change auth.")
+        user = {}
+
+        try:
+            user = authenticate(self, remote)
+        except AuthFailedError as e:
+            print e
+            print "No credential saved."
+        else:
+            self._change_auth(filename)
+            print subscription_message(self, user)
+        return user
+
+    @property
+    def is_auth_configured(self):
+        """
+        Returns True if authentication is setup for this configuration object.
+
+        Note
+        ----
+        This only checks whether the auth is configured, not whether the
+        authentication information is correct.
+        """
+        # FIXME: this does not really belong here, and should be put in the
+        # configuration object once it is not a module-level global
+        if self.EPD_auth:
+            return True
+        else:
+            username = self.EPD_username
+            if username and keyring:
+                return True
+            else:
+                return False
+
+    @property
+    def local(self):
+        return self._local
+
+    @local.setter
+    def local(self, value):
+        self._local = abs_expanduser(value)
+
+    @property
+    def prefix(self):
+        return self._prefix
+
+    @prefix.setter
+    def prefix(self, value):
+        self._prefix = abs_expanduser(value)
+
+    @property
+    def IndexedRepos(self):
+        return self._IndexedRepos
+
+    @IndexedRepos.setter
+    def IndexedRepos(self, urls):
+        self._IndexedRepos = [fill_url(url) for url in urls]
+
+    @property
+    def webservice_entry_point(self):
+        return self._webservice_entry_point
+
+    @webservice_entry_point.setter
+    def webservice_entry_point(self, url):
+        self._webservice_entry_point = fill_url(url)
 
 
-def get_auth():
+def get_path():
     """
-    Retrieve the saved `auth` (username, password) tuple.
+    Return the absolute path to the config file.
     """
-    return AuthenticatorStore().load_auth()
+    if isfile(home_config_path):
+        return home_config_path
+    if isfile(system_config_path):
+        return system_config_path
+    return None
+
+
+def input_auth():
+    """
+    Prompt user for username and password.  Return (username, password)
+    tuple or (None, None) if left blank.
+    """
+    print """\
+Please enter the email address (or username) and password for your
+EPD or EPD Free subscription.  If you are not subscribed to EPD,
+just press Enter.
+"""
+    username = raw_input('Email (or username): ').strip()
+    if not username:
+        return None, None
+    return username, getpass('Password: ')
 
 
 def web_auth(auth,
@@ -380,7 +466,7 @@ def subscription_level(user):
             return None
 
 
-def subscription_message(user):
+def subscription_message(config, user):
     """
     Return a 'subscription level' message based on the `user`
     dictionary.
@@ -391,7 +477,7 @@ def subscription_message(user):
     message = ""
 
     if user.get('is_authenticated', False):
-        username, password = get_auth()
+        username, password = config.get_auth()
         login = "You are logged in as %s" % username
         subscription = "Subscription level: %s" % subscription_level(user)
         name = user.get('first_name', '') + ' ' + user.get('last_name', '')
@@ -405,123 +491,6 @@ def subscription_message(user):
     return message
 
 
-def authenticate(auth, remote=None):
-    """
-    Attempt to authenticate the user's credentials by the appropriate
-    means.
-
-    `auth` is a tuple of (username, password).
-    `remote` is enpkg.remote, required if not using the web API to authenticate
-
-    If 'use_webservice' is set, authenticate with the web API and return
-    a dictionary containing user info on success.
-
-    Else, authenticate with remote.connect and return a dict containing
-    is_authenticated=True on success.
-
-    If authentication fails, raise an exception.
-    """
-    user = {}
-    if get('use_webservice'):
-        # check credentials using web API
-        try:
-            user = web_auth(auth)
-            assert user['is_authenticated']
-        except Exception as e:
-            raise AuthFailedError('Authentication failed: %s.' % e)
-    else:
-        # check credentials using remote.connect
-        try:
-            print 'Verifying user login...'
-            remote.connect(auth)
-            user = dict(is_authenticated=True)
-        except KeyError:
-            raise AuthFailedError('Authentication failed:'
-                    ' Invalid user login.')
-        except Exception as e:
-            raise AuthFailedError('Authentication failed: %s.' % e)
-    return user
-
-
-def clear_auth():
-    username = get('EPD_username')
-    if username and keyring:
-        keyring.set_password(KEYRING_SERVICE_NAME, username, '')
-    change_auth('', None)
-
-
-def change_auth(username, password):
-    pat = re.compile(r'^(EPD_auth|EPD_username)\s*=.*$', re.M)
-
-    # clear the cache so the next get_auth is correct
-    clear_cache()
-
-    path = get_path()
-    if path is None:
-        write(username, password)
-        return
-
-    if username is None and password is None:
-        return
-
-    with open(path) as fi:
-        data = fi.read()
-
-    if username == '':
-        data = pat.sub('', data)
-        with open(path, 'w') as fo:
-            fo.write(data)
-        return
-    else:
-        if not password:
-            raise ValueError("No password -- this is a bug.")
-
-        if keyring:
-            keyring.set_password(KEYRING_SERVICE_NAME, username, password)
-            authline = 'EPD_username = %r' % username
-        else:
-            auth = ('%s:%s' % (username, password)).encode('base64')
-            authline = 'EPD_auth = %r' % auth.strip()
-
-        if pat.search(data):
-            data = pat.sub(authline, data)
-        else:
-            lines = data.splitlines()
-            lines.insert(10, authline)
-            data = '\n'.join(lines) + '\n'
-
-        with open(path, 'w') as fo:
-            fo.write(data)
-
-def checked_change_auth(username, password, remote=None):
-    """
-    Only run change_auth if the credentials are authenticated (or if the
-    username is None).  Print out subscription info if successful.
-
-    `remote` is enpkg.remote and is required if not using the web API to
-    authenticate.
-
-    If successful at authenticating, return a dictionary containing user info.
-    """
-    auth = (username, password)
-    user = {}
-
-    # For backwards compatibility
-    if username is None or username is '':
-        change_auth(username, password)
-        return user
-
-    try:
-        user = authenticate(auth, remote)
-    except Exception as e:
-        print e.message
-        print "No credentials saved."
-    else:
-        change_auth(username, password)
-        print subscription_message(user)
-    return user
-
-
 def prepend_url(url):
     f = open(get_path(), 'r+')
     data = f.read()
@@ -533,117 +502,71 @@ def prepend_url(url):
     f.write(data)
     f.close()
 
-
-def clear_cache():
-    if hasattr(read, 'cache'):
-        del read.cache
-
-
-def read():
+def authenticate(configuration, remote=None):
     """
-    Return the configuration from the config file as a dictionary,
-    fix some values, and give defaults.
-    """
-    if hasattr(read, 'cache'):
-        return read.cache
+    Attempt to authenticate the user's credentials by the appropriate
+    means.
 
-    path = get_path()
-    if path is None:
-        read.cache = Configuration()
-        return read.cache
+    `remote` is enpkg.remote, required if not using the web API to
+    authenticate
+
+    If 'use_webservice' is set, authenticate with the web API and return
+    a dictionary containing user info on success.
+
+    Else, authenticate with remote.connect and return a dict containing
+    is_authenticated=True on success.
+
+    If authentication fails, raise an exception.
+    """
+    # FIXME: remove passing remote hack.
+
+    if not configuration.is_auth_configured:
+        raise EnstallerException("No valid auth information in "
+                                 "configuration, cannot authenticate.")
+
+    user = {}
+    auth = configuration.get_auth()
+
+    if configuration.use_webservice:
+        # check credentials using web API
+        try:
+            user = web_auth(auth)
+            assert user['is_authenticated']
+        except Exception as e:
+            raise AuthFailedError('Authentication failed: %s.' % e)
     else:
-        config = Configuration()
-        parser = PythonConfigurationParser()
-        with open(path, "rt") as fp:
-            data = fp.read()
-        config.update(parser.parse(data))
-        read.cache = config
-        return read.cache
-
-def get_repository_cache(prefix):
-    return get("repository_cache")
-
-def get(key, default=None):
-    return read().get(key, default)
+        # check credentials using remote.connect
+        try:
+            remote.connect(auth)
+            user = dict(is_authenticated=True)
+        except KeyError:
+            raise AuthFailedError('Authentication failed:'
+                    ' Invalid user login.')
+        except Exception as e:
+            raise AuthFailedError('Authentication failed: %s.' % e)
+    return user
 
 
-def print_config(remote, prefix):
+def print_config(config, remote, prefix):
     print "Python version:", PY_VER
     print "enstaller version:", __version__
     print "sys.prefix:", sys.prefix
     print "platform:", platform.platform()
     print "architecture:", platform.architecture()[0]
-    print "use_webservice:", get('use_webservice')
+    print "use_webservice:", config.use_webservice
     print "config file:", get_path()
     print "settings:"
     print "    prefix = %s" % prefix
-    for k in 'local', 'noapp', 'proxy':
-        print "    %s = %r" % (k, get(k))
-    print "    IndexedRepos:", '(not used)' if get('use_webservice') else ''
-    for repo in get('IndexedRepos'):
+    print "    %s = %r" % ("local", config.local)
+    print "    %s = %r" % ("noapp", config.noapp)
+    print "    %s = %r" % ("proxy", config.proxy)
+    print "    IndexedRepos:", '(not used)' if config.use_webservice else ''
+    for repo in config.IndexedRepos:
         print '        %r' % repo
 
-    username, password = get_auth()
     user = {}
     try:
-        user = authenticate((username, password), remote)
+        user = authenticate(config, remote)
     except Exception as e:
         print e
-    print subscription_message(user)
-
-def is_auth_configured():
-    """
-    Returns True if enstaller configuration file has authentication
-    information.
-
-    Note
-    ----
-    This only checks whether the auth is configured, not whether the
-    authentication information is correct.
-    """
-    # FIXME: this does not really belong here, and should be put in the
-    # configuration object once it is not a module-level global
-    auth = get("EPD_auth")
-    if auth:
-        return True
-    else:
-        username = get("EPD_username")
-        if username and keyring:
-            return True
-        else:
-            return False
-
-class AuthenticatorStore(object):
-    def __init__(self):
-        self._auth = None
-
-    def load_auth(self):
-        """
-        Load authentication information from enstaller configuration file (and
-        potentially keyring).
-        """
-        if self._auth is None:
-            self._auth = self._get_auth()
-        return self._auth
-
-    def _get_auth(self):
-        old_auth = get("EPD_auth")
-        if old_auth:
-            decoded_auth = old_auth.decode('base64')
-            parts = decoded_auth.split(":")
-            if len(parts) != 2:
-                raise InvalidConfiguration("Authentication string is corrupted")
-            else:
-                return tuple(parts)
-
-        username = get("EPD_username")
-        if username:
-            password = None
-            if keyring:
-                password = keyring.get_password(KEYRING_SERVICE_NAME, username)
-            if password:
-                return username, password
-            else:
-                return None, None
-        else:
-            return None, None
+    print subscription_message(config, user)

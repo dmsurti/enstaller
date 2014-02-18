@@ -1,5 +1,6 @@
 import json
 import os.path
+import shutil
 import sys
 import tempfile
 import textwrap
@@ -16,10 +17,9 @@ import mock
 
 import enstaller.config
 
-from enstaller.config import AuthFailedError, authenticate, change_auth, \
-    clear_cache, get, get_auth, get_default_url, get_path, input_auth, \
-    is_auth_configured, subscription_level, web_auth, write
-from enstaller.config import PythonConfigurationParser
+from enstaller.config import (AuthFailedError, authenticate,
+    get_default_url, get_path, input_auth, subscription_level, web_auth)
+from enstaller.config import Configuration, PythonConfigurationParser
 
 from .common import patched_read
 
@@ -76,87 +76,59 @@ class TestInputAuth(unittest.TestCase):
             self.assertEqual(input_auth(), (None, None))
 
 class TestWriteConfig(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.f = os.path.join(self.d, ".enstaller4rc")
+
     def tearDown(self):
-        clear_cache()
+        shutil.rmtree(self.d)
 
-    def _mocked_open_factory(self):
-        f = tempfile.NamedTemporaryFile(delete=False)
-        def mocked_open(ignored, ignored2):
-            return f
-
-        return mocked_open, f
-
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
     @mock.patch("enstaller.config.keyring", None)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
-    def test_cleared_cache(self):
-        mocked_open, f = self._mocked_open_factory()
-        with mock.patch("__builtin__.open", mocked_open):
-            m = mock.MagicMock()
-            with mock.patch("enstaller.config.clear_cache", m):
-                write()
-            self.assertTrue(m.called)
-
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
-    @mock.patch("enstaller.config.keyring", None)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
     def test_simple(self):
-        mocked_open, f = self._mocked_open_factory()
-        with mock.patch("__builtin__.open", mocked_open):
-            write()
+        config = Configuration()
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
 
-        with mock.patch("enstaller.config.get_path", lambda: f.name):
-            self.assertEqual(get("EPD_auth"), FAKE_CREDS)
-            self.assertEqual(get("autoupdate"), True)
-            self.assertEqual(get("proxy"), None)
-            self.assertEqual(get("use_webservice"), True)
-            self.assertEqual(get("webservice_entry_point"), get_default_url())
+        config.write(self.f)
 
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
+        config = Configuration.from_file(self.f)
+
+        self.assertEqual(config.EPD_auth, FAKE_CREDS)
+        self.assertEqual(config.autoupdate, True)
+        self.assertEqual(config.proxy, None)
+        self.assertEqual(config.use_webservice, True)
+        self.assertEqual(config.webservice_entry_point, get_default_url())
+
     @mock.patch("enstaller.config.keyring", None)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
     def test_simple_with_proxy(self):
-        mocked_open, f = self._mocked_open_factory()
-        with mock.patch("__builtin__.open", mocked_open):
-            write(proxy="http://acme.com:3128")
+        proxystr = "http://acme.com:3128"
 
-        with mock.patch("enstaller.config.get_path", lambda: f.name):
-            self.assertEqual(get("proxy"), "http://acme.com:3128")
+        config = Configuration()
+        config.proxy = proxystr
+        config.write(self.f)
 
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
-    @mock.patch("enstaller.config.keyring", None)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
-    def test_simple_with_username_password(self):
-        user, password = "dummy", "dummy"
-        creds = "{0}:{1}".format(user, password).encode("base64").rstrip()
+        config = Configuration.from_file(self.f)
+        self.assertEqual(config.proxy, proxystr)
 
-        mocked_open, f = self._mocked_open_factory()
-        with mock.patch("__builtin__.open", mocked_open):
-            write(username=user, password=password)
-
-        with mock.patch("enstaller.config.get_path", lambda: f.name):
-            self.assertEqual(get("EPD_auth"), creds)
-
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
-    @mock.patch("enstaller.config.keyring", None)
     @mock.patch("enstaller.config.sys.platform", "linux2")
     @mock.patch("enstaller.config.os.getuid", lambda: 0)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
     def test_use_system_path_under_root(self):
         with mock.patch("__builtin__.open") as m:
-            write()
-            self.assertEqual(m.call_args[0][0], enstaller.config.system_config_path)
+            config = Configuration()
+            config.write()
+            self.assertTrue(m.called_with(enstaller.config.system_config_path))
 
-    @mock.patch("enstaller.config.getpass", lambda ignored: FAKE_PASSWORD)
-    @mock.patch("__builtin__.raw_input", lambda ignored: FAKE_USER)
     def test_keyring_call(self):
         with mock.patch("__builtin__.open"):
-            mocked_keyring = mock.MagicMock()
-            mocked_keyring.set_password = mock.MagicMock()
+            mocked_keyring = mock.MagicMock(["get_password", "set_password"])
             with mock.patch("enstaller.config.keyring", mocked_keyring):
-                write()
-                self.assertEqual(mocked_keyring.set_password.call_args[0],
-                                 ("Enthought.com", FAKE_USER, FAKE_PASSWORD))
+                config = Configuration()
+                config.set_auth(FAKE_USER, FAKE_PASSWORD)
+                config.write()
+
+                r_args = ("Enthought.com", FAKE_USER, FAKE_PASSWORD)
+                self.assertTrue(mocked_keyring.set_password.call_with(r_args))
+                r_args = ("Enthought.com", FAKE_USER)
+                self.assertTrue(mocked_keyring.get_password.call_with(r_args))
 
 
 AUTH_API_URL = 'https://api.enthought.com/accounts/user/info/'
@@ -225,94 +197,90 @@ class TestWebAuth(unittest.TestCase):
                 web_auth((FAKE_USER, FAKE_PASSWORD))
 
 class TestGetAuth(unittest.TestCase):
-    def test_with_keyring(self):
-        def mocked_get(arg):
-            if arg == "EPD_auth":
-                return None
-            elif arg == "EPD_username":
-                return FAKE_USER
-            else:
-                return get(arg)
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.f = os.path.join(self.d, ".enstaller4rc")
 
-        with mock.patch("enstaller.config.get", mocked_get):
-            with mock.patch("enstaller.config.keyring") as mocked_keyring:
-                attrs = {"get_password.return_value": FAKE_PASSWORD}
-                mocked_keyring.configure_mock(**attrs)
-                self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
-                mocked_keyring.get_password.assert_called_with("Enthought.com",
-                                                               FAKE_USER)
+    def tearDown(self):
+        shutil.rmtree(self.d)
+
+    def test_with_keyring(self):
+        with mock.patch("enstaller.config.keyring") as mocked_keyring:
+            attrs = {"get_password.return_value": FAKE_PASSWORD}
+            mocked_keyring.configure_mock(**attrs)
+
+            config = Configuration()
+            config.set_auth(FAKE_USER, FAKE_PASSWORD)
+
+            self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
+            mocked_keyring.get_password.assert_called_with("Enthought.com",
+                                                           FAKE_USER)
 
     @mock.patch("enstaller.config.keyring", None)
     def test_with_auth(self):
-        def mocked_get(arg):
-            if arg == "EPD_auth":
-                return FAKE_CREDS
-            else:
-                return get(arg)
+        config = Configuration()
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
 
-        with mock.patch("enstaller.config.get", mocked_get):
-            self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
+        self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
 
     def test_with_auth_and_keyring(self):
-        def mocked_get(arg):
-            if arg == "EPD_auth":
-                return FAKE_CREDS
-            else:
-                return get(arg)
+        with open(self.f, "wt") as fp:
+            fp.write("EPD_auth = '{0}'".format(FAKE_CREDS))
+        config = Configuration.from_file(self.f)
 
-        with mock.patch("enstaller.config.get", mocked_get):
-            mocked_keyring = mock.Mock(["get_password"])
-            with mock.patch("enstaller.config.keyring", mocked_keyring):
-                self.assertFalse(mocked_keyring.get_password.called)
-                self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
+        attrs = {"get_password.return_value": FAKE_PASSWORD}
+        mocked_keyring = mock.Mock(**attrs)
+        with mock.patch("enstaller.config.keyring", mocked_keyring):
+            config.EPD_username = FAKE_USER
+
+            self.assertFalse(mocked_keyring.get_password.called)
+            self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
 
     @mock.patch("enstaller.config.keyring", None)
     def test_without_auth_or_keyring(self):
-        def mocked_get(arg):
-            if arg in ("EPD_auth", "EPD_username"):
-                return None
-            else:
-                return get(arg)
-
-        with mock.patch("enstaller.config.get", mocked_get):
-            self.assertEqual(get_auth(), (None, None))
+        config = Configuration()
+        self.assertEqual(config.get_auth(), (None, None))
 
 class TestChangeAuth(unittest.TestCase):
-    def setUp(self):
-        clear_cache()
-
-    def tearDown(self):
-        clear_cache()
-
     @mock.patch("enstaller.config.keyring", None)
     def test_change_existing_config_file(self):
         r_new_password = "ouioui_dans_sa_petite_voiture"
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("EPD_auth = '{0}'".format(FAKE_CREDS))
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
-            change_auth(FAKE_USER, r_new_password)
-            self.assertEqual(get_auth(), (FAKE_USER, r_new_password))
+        config = Configuration.from_file(fp.name)
+        self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
+
+        config.set_auth(FAKE_USER, r_new_password)
+        config._change_auth(fp.name)
+        new_config = Configuration.from_file(fp.name)
+
+        self.assertEqual(new_config.get_auth(), (FAKE_USER, r_new_password))
 
     @mock.patch("enstaller.config.keyring", None)
     def test_change_existing_config_file_empty_username(self):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("EPD_auth = '{0}'".format(FAKE_CREDS))
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
-            change_auth("", "dummy")
-            self.assertEqual(get_auth(), (None, None))
+        config = Configuration.from_file(fp.name)
+        self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
+
+        config.reset_auth()
+        config._change_auth(fp.name)
+
+        new_config = Configuration.from_file(fp.name)
+        self.assertEqual(new_config.get_auth(), (None, None))
 
     def test_change_existing_config_file_with_keyring(self):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("EPD_auth = '{0}'".format(FAKE_CREDS))
 
         with mock.patch("enstaller.config.keyring") as mocked_keyring:
-            with mock.patch("enstaller.config.get_path", lambda: fp.name):
-                change_auth("user", "dummy")
-                mocked_keyring.set_password.assert_called_with("Enthought.com", "user", "dummy")
+            config = Configuration.from_file(fp.name)
+            config.set_auth("user", "dummy")
+            config.write(fp.name)
+
+            mocked_keyring.set_password.assert_called_with("Enthought.com", "user", "dummy")
 
         with open(fp.name, "rt") as f:
             self.assertRegexpMatches(f.read(), "EPD_username")
@@ -324,60 +292,75 @@ class TestChangeAuth(unittest.TestCase):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("")
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            self.assertEqual(get_auth(), (None, None))
-            change_auth(FAKE_USER, FAKE_PASSWORD)
-            self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
+        config = Configuration.from_file(fp.name)
+        self.assertEqual(config.get_auth(), (None, None))
+
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+        self.assertEqual(config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
 
     @mock.patch("enstaller.config.keyring", None)
     def test_no_config_file(self):
-        with mock.patch("enstaller.config.get_path", lambda: None):
-            with mock.patch("enstaller.config.write") as m:
-                self.assertEqual(get_auth(), (None, None))
-                change_auth(FAKE_USER, FAKE_PASSWORD)
-                m.assert_called_with(FAKE_USER, FAKE_PASSWORD)
+        with tempfile.NamedTemporaryFile(delete=False) as fp:
+            fp.write("")
 
+        config = Configuration()
+        self.assertEqual(config.get_auth(), (None, None))
+
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+        config.write(fp.name)
+
+        new_config = Configuration.from_file(fp.name)
+        self.assertEqual(new_config.get_auth(), (FAKE_USER, FAKE_PASSWORD))
+
+    # FIXME: do we really want to revert the behaviour of change_auth() with
+    # auth == (None, None) to do nothing ?
+    @unittest.expectedFailure
     @mock.patch("enstaller.config.keyring", None)
     def test_change_config_file_empty_auth(self):
         config_data = "EPD_auth = '{0}'".format(FAKE_CREDS)
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write(config_data)
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            with mock.patch("enstaller.config.write") as m:
-                change_auth(None, None)
-                self.assertFalse(m.called)
+        config = Configuration.from_file(fp.name)
+        config.set_auth(None, None)
+        config._change_auth(fp.name)
 
-                with open(fp.name, "rt") as fp:
-                    self.assertEqual(fp.read(), config_data)
+        with open(fp.name, "rt") as fp:
+            self.assertEqual(fp.read(), config_data)
 
 class TestAuthenticate(unittest.TestCase):
-    @mock.patch("enstaller.config.read",
-                lambda: patched_read(use_webservice=True))
     def test_use_webservice_valid_user(self):
+        config = Configuration()
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+
         with mock.patch("enstaller.config.web_auth") as mocked_auth:
-            authenticate((FAKE_USER, FAKE_PASSWORD))
+            authenticate(config)
             self.assertTrue(mocked_auth.called)
 
-    @mock.patch("enstaller.config.read",
-                lambda: patched_read(use_webservice=True))
     def test_use_webservice_invalid_user(self):
+        config = Configuration()
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+
         with mock.patch("enstaller.config.web_auth") as mocked_auth:
             mocked_auth.return_value = {"is_authenticated": False}
 
             with self.assertRaises(AuthFailedError):
-                authenticate((FAKE_USER, FAKE_PASSWORD))
+                authenticate(config)
 
-    @mock.patch("enstaller.config.read",
-                lambda: patched_read(use_webservice=False))
     def test_use_remote(self):
+        config = Configuration()
+        config.use_webservice = False
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+
         remote = mock.Mock()
-        user = authenticate((FAKE_USER, FAKE_PASSWORD), remote)
+        user = authenticate(config, remote)
         self.assertEqual(user, {"is_authenticated": True})
 
-    @mock.patch("enstaller.config.read",
-                lambda: patched_read(use_webservice=False))
     def test_use_remote_invalid(self):
+        config = Configuration()
+        config.use_webservice = False
+        config.set_auth(FAKE_USER, FAKE_PASSWORD)
+
         remote = mock.Mock()
 
         for klass in KeyError, Exception:
@@ -385,7 +368,7 @@ class TestAuthenticate(unittest.TestCase):
             remote.configure_mock(**attrs)
 
             with self.assertRaises(AuthFailedError):
-                authenticate((FAKE_USER, FAKE_PASSWORD), remote)
+                authenticate(config, remote)
 
 class TestSubscriptionLevel(unittest.TestCase):
     def test_unsubscribed_user(self):
@@ -406,27 +389,21 @@ class TestSubscriptionLevel(unittest.TestCase):
         self.assertIsNone(subscription_level(user_info))
 
 class TestAuthenticationConfiguration(unittest.TestCase):
-    def setUp(self):
-        clear_cache()
-
-    def tearDown(self):
-        clear_cache()
-
     @mock.patch("enstaller.config.keyring", None)
     def test_without_configuration_no_keyring(self):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("")
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            self.assertFalse(is_auth_configured())
+        config = Configuration.from_file(fp.name)
+        self.assertFalse(config.is_auth_configured)
 
     def test_without_configuration_with_keyring(self):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
             fp.write("")
 
         with mock.patch("enstaller.config.keyring"):
-            with mock.patch("enstaller.config.get_path", lambda: fp.name):
-                self.assertFalse(is_auth_configured())
+            config = Configuration.from_file(fp.name)
+            self.assertFalse(config.is_auth_configured)
 
     @mock.patch("enstaller.config.keyring", None)
     def test_with_configuration_no_keyring(self):
@@ -434,8 +411,8 @@ class TestAuthenticationConfiguration(unittest.TestCase):
             auth_line = "EPD_auth = '{0}'".format(FAKE_CREDS)
             fp.write(auth_line)
 
-        with mock.patch("enstaller.config.get_path", lambda: fp.name):
-            self.assertTrue(is_auth_configured())
+        config = Configuration.from_file(fp.name)
+        self.assertTrue(config.is_auth_configured)
 
     def test_with_configuration_with_keyring(self):
         with tempfile.NamedTemporaryFile(delete=False) as fp:
@@ -444,8 +421,8 @@ class TestAuthenticationConfiguration(unittest.TestCase):
 
         mocked_keyring = mock.Mock(["get_password"])
         with mock.patch("enstaller.config.keyring", mocked_keyring):
-            with mock.patch("enstaller.config.get_path", lambda: fp.name):
-                self.assertTrue(is_auth_configured())
+            config = Configuration.from_file(fp.name)
+            self.assertTrue(config.is_auth_configured)
 
 class TestConfigurationParsing(unittest.TestCase):
     def test_parse_simple(self):

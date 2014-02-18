@@ -25,7 +25,8 @@ from enstaller import __version__ as __ENSTALLER_VERSION__
 from enstaller._version import is_released as IS_RELEASED
 from egginst.utils import bin_dir_name, rel_site_packages
 from enstaller import __version__
-import enstaller.config as config
+from enstaller.config import (Configuration, authenticate, get_path,
+    input_auth, print_config, subscription_level, subscription_message)
 from enstaller.proxy.api import setup_proxy
 from enstaller.utils import abs_expanduser, fill_url, exit_if_sudo_on_venv
 
@@ -196,13 +197,13 @@ def search(enpkg, pat=None):
     # if the user's search returns any packages that are not available
     # to them, attempt to authenticate and print out their subscriber
     # level
-    if config.get('use_webservice') and not(SUBSCRIBED):
+    if enpkg.config.use_webservice and not(SUBSCRIBED):
         user = {}
         try:
-            user = config.authenticate(config.get_auth())
+            user = authenticate(config)
         except Exception as e:
             print(e.message)
-        print(config.subscription_message(user))
+        print(subscription_message(config, user))
 
 
 def updates_check(enpkg):
@@ -297,10 +298,10 @@ def install_req(enpkg, req, opts):
     req = req_from_anything(req)
 
     def _print_invalid_permissions():
-        user = config.authenticate(config.get_auth())
+        user = authenticate(enpkg.config)
         print("No package found to fulfill your requirement at your "
               "subscription level:")
-        for line in config.subscription_message(user).splitlines():
+        for line in subscription_message(enpkg.config, user).splitlines():
             print(" " * 4 + line)
 
     def _perform_install(last_try=False):
@@ -406,7 +407,7 @@ def update_enstaller(enpkg, opts):
     """
     updated = False
     # exit early if autoupdate=False
-    if not config.get('autoupdate', True):
+    if not enpkg.config.autoupdate:
         return updated
     if not IS_RELEASED:
         return updated
@@ -433,6 +434,8 @@ def main(argv=None):
         user_base = site.USER_BASE
     except AttributeError:
         user_base = abs_expanduser('~/.local')
+
+    config = Configuration._get_default_config()
 
     p = ArgumentParser(description=__doc__)
     p.add_argument('cnames', metavar='NAME', nargs='*',
@@ -541,7 +544,7 @@ def main(argv=None):
     elif args.prefix:
         prefix = args.prefix
     else:
-        prefix = config.get('prefix', sys.prefix)
+        prefix = config.prefix
 
     # now make prefixes
     if prefix == sys.prefix:
@@ -589,33 +592,34 @@ def main(argv=None):
 
     if args.proxy:                                # --proxy
         setup_proxy(args.proxy)
-    elif config.get('proxy'):
-        setup_proxy(config.get('proxy'))
+    elif config.proxy:
+        setup_proxy(config.proxy)
     else:
         setup_proxy()
 
     evt_mgr = None
 
-    if config.get('use_webservice'):
+    if config.use_webservice:
         remote = None # Enpkg will create the default
     else:
-        urls = [fill_url(u) for u in config.get('IndexedRepos')]
-        remote = create_joined_store(urls)
+        urls = [fill_url(u) for u in config.IndexedRepos]
+        remote = create_joined_store(config, urls)
 
     enpkg = Enpkg(remote, prefixes=prefixes, hook=args.hook,
-                  evt_mgr=evt_mgr, verbose=args.verbose)
+                  evt_mgr=evt_mgr, verbose=args.verbose, config=config)
 
 
     if args.config:                               # --config
-        config.print_config(enpkg.remote, prefixes[0])
+        print_config(config, enpkg.remote, prefixes[0])
         return
 
     if args.userpass:                             # --userpass
-        username, password = config.input_auth()
-        config.checked_change_auth(username, password, enpkg.remote)
+        username, password = input_auth()
+        config.set_auth(username, password)
+        config._checked_change_auth()
         return
 
-    if not config.is_auth_configured():
+    if not config.is_auth_configured:
         print(PLEASE_AUTH_MESSAGE)
         sys.exit(-1)
 
@@ -625,7 +629,7 @@ def main(argv=None):
         print(PLEASE_AUTH_MESSAGE)
         sys.exit(-1)
     else:
-        config.authenticate(auth, enpkg.remote)
+        authenticate(config, enpkg.remote)
 
     if args.dry_run:
         def print_actions(actions):

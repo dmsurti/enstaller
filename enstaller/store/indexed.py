@@ -4,10 +4,11 @@ import urllib2
 from collections import defaultdict
 from os.path import join
 
+from enstaller.config import Configuration
+
 from base import AbstractStore
 from cached import CachedHandler
 from compressed import CompressedHandler
-from enstaller import config
 
 
 class IndexedStore(AbstractStore):
@@ -95,9 +96,11 @@ class RemoteHTTPIndexedStore(IndexedStore):
 
     def __init__(self, url, cache_dir=None):
         super(RemoteHTTPIndexedStore, self).__init__()
-        self.root = url
         if cache_dir is None:
-            cache_dir = config.get('local')
+            # FIXME: pass config explicitly
+            cache_dir = Configuration._get_default_config().local
+
+        self.root = url
         self.cache_dir = cache_dir
 
     def info(self):

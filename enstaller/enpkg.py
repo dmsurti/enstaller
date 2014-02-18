@@ -20,7 +20,7 @@ from egg_meta import is_valid_eggname, split_eggname
 from history import History
 
 # Included for backward compatibility
-from enstaller.config import get_default_url, get_repository_cache
+from enstaller.config import Configuration
 
 def create_joined_store(urls):
     stores = []
@@ -36,8 +36,8 @@ def create_joined_store(urls):
     return JoinedStore(stores)
 
 
-def get_default_kvs():
-    url = enstaller.config.read()['webservice_entry_point']
+def get_default_kvs(config):
+    url = config.webservice_entry_point
     return RemoteHTTPIndexedStore(url)
 
 
@@ -82,8 +82,8 @@ def check_prefixes(prefixes):
         if not index_order == sorted(index_order):
             warnings.warn("Order of path prefixes doesn't match PYTHONPATH")
 
-def get_writable_local_dir(prefix):
-    local_dir = get_repository_cache(prefix)
+def get_writable_local_dir(config):
+    local_dir = config.repository_cache
     if not os.access(local_dir, os.F_OK):
         try:
             os.makedirs(local_dir)
@@ -98,13 +98,13 @@ def get_writable_local_dir(prefix):
            'with current permissions:\n'
            '    %s\n'
            'Using a temporary cache for index and eggs.\n' %
-           prefix)
+           config.prefix)
     return tempfile.mkdtemp()
 
 
-def get_default_remote(prefixes):
-    url = enstaller.config.read()['webservice_entry_point']
-    local_dir = get_writable_local_dir(prefixes[0])
+def get_default_remote(config):
+    url = config.webservice_entry_point
+    local_dir = get_writable_local_dir(config)
     return RemoteHTTPIndexedStore(url, local_dir)
 
 
@@ -143,15 +143,19 @@ class Enpkg(object):
         at all).
     """
     def __init__(self, remote=None, userpass='<config>', prefixes=[sys.prefix],
-                 hook=False, evt_mgr=None, verbose=False):
-        self.local_dir = get_writable_local_dir(prefixes[0])
+                 hook=False, evt_mgr=None, verbose=False, config=None):
+        if config is None:
+            self.config = Configuration._get_default_config()
+        else:
+            self.config = config
+
+        self.local_dir = get_writable_local_dir(self.config)
         if remote is None:
-            self.remote = get_default_remote(prefixes)
+            self.remote = get_default_remote(self.config)
         else:
             self.remote = remote
         if userpass == '<config>':
-            import config
-            self.userpass = config.get_auth()
+            self.userpass = self.config.get_auth()
         else:
             self.userpass = userpass
 

@@ -1,7 +1,19 @@
-import unittest
+import os.path
+import shutil
+import sys
+import tempfile
+
+if sys.version_info[:2] < (2, 7):
+    import unittest2 as unittest
+else:
+    import unittest
+
 from mock import patch
 
-import enstaller.config as config
+import enstaller.config
+
+from enstaller.config import Configuration
+from enstaller.errors import AuthFailedError, InvalidConfiguration
 
 
 basic_user = dict(first_name="Jane", last_name="Doe", is_authenticated=True,
@@ -12,54 +24,58 @@ anon_user = dict(is_authenticated=False)
 old_auth_user = {}
 
 
-@patch('enstaller.config.change_auth')
 class CheckedChangeAuthTestCase(unittest.TestCase):
+    def setUp(self):
+        self.d = tempfile.mkdtemp()
+        self.f = os.path.join(self.d, "enstaller4rc")
+
+    def tearDown(self):
+        shutil.rmtree(self.d)
 
     @patch('enstaller.config.authenticate', return_value=basic_user)
-    def test_basic_user(self, mock1, mock2):
-        usr = config.checked_change_auth('usr', 'password')
-        self.assertTrue(config.change_auth.called)
+    def test_simple(self, mock1):
+        config = Configuration()
+        config.set_auth('usr', 'password')
+        config._checked_change_auth(self.f)
+
+        new_config = Configuration.from_file(self.f)
+        usr = enstaller.config.authenticate(new_config)
+
         self.assertTrue(usr.get('is_authenticated'))
         self.assertTrue(usr.get('has_subscription'))
 
-    @patch('enstaller.config.authenticate', return_value=free_user)
-    def test_free_user(self, mock1, mock2):
-        usr = config.checked_change_auth('usr', 'password')
-        self.assertTrue(config.change_auth.called)
-        self.assertTrue(usr.get('is_authenticated'))
-        self.assertFalse(usr.get('has_subscription'))
-
     @patch('enstaller.config.authenticate',
-            side_effect=config.AuthFailedError())
-    def test_no_acct(self, mock1, mock2):
-        usr = config.checked_change_auth('usr', 'password')
-        self.assertFalse(config.change_auth.called)
+            side_effect=AuthFailedError())
+    def test_no_acct(self, mock1):
+        config = Configuration()
+        config.set_auth("usr", "password")
+
+        usr = config._checked_change_auth(self.f)
+
         self.assertFalse(usr.get('is_authenticated', False))
         self.assertEqual(usr, {})
 
     @patch('enstaller.config.authenticate', return_value=old_auth_user)
-    def test_remote_success(self, mock1, mock2):
-        usr = config.checked_change_auth('usr', 'password')
-        self.assertTrue(config.change_auth.called)
-        self.assertFalse(usr.get('is_authenticated', False))
+    def test_remote_success(self, mock1):
+        config = Configuration()
+        config.set_auth("usr", "password")
+
+        usr = config._checked_change_auth(self.f)
         self.assertEqual(usr, {})
 
-    @patch('enstaller.config.authenticate',
-            side_effect=config.AuthFailedError())
-    def test_nones(self, mock1, mock2):
-        usr = config.checked_change_auth(None, None)
-        self.assertTrue(config.change_auth.called)
-        self.assertFalse(usr.get('is_authenticated', False))
-        self.assertEqual(usr, {})
+    def test_nones(self):
+        config = Configuration()
 
-    @patch('enstaller.config.authenticate',
-            side_effect=config.AuthFailedError())
-    def test_empty_strings(self, mock1, mock2):
-        usr = config.checked_change_auth('', '')
-        self.assertTrue(config.change_auth.called)
-        self.assertFalse(usr.get('is_authenticated', False))
-        self.assertEqual(usr, {})
+        with self.assertRaises(InvalidConfiguration):
+            config.set_auth(None, None)
 
+    @patch('enstaller.config.keyring')
+    def test_empty_strings(self, mock1):
+        config = Configuration()
+        config.set_auth("", "")
+
+        with self.assertRaises(InvalidConfiguration):
+            config._checked_change_auth(self.f)
 
 
 class SearchTestCase(unittest.TestCase):
