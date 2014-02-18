@@ -12,6 +12,7 @@ import sys
 import textwrap
 import platform
 import urllib2
+import warnings
 
 from getpass import getpass
 from os.path import isfile, join
@@ -383,6 +384,11 @@ class Configuration(object):
     def webservice_entry_point(self, url):
         self._webservice_entry_point = fill_url(url)
 
+
+def get_auth():
+    warnings.warn("get_auth deprecated, use Configuration.get_auth instead",
+                  DeprecationWarning)
+    return Configuration._get_default_config().get_auth()
 
 def get_path():
     """

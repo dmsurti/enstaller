@@ -15,10 +15,13 @@ else:
 
 import mock
 
+from egginst.tests.common import mkdtemp
+
 import enstaller.config
 
 from enstaller.config import (AuthFailedError, authenticate,
-    get_default_url, get_path, input_auth, subscription_level, web_auth)
+    get_auth, get_default_url, get_path, input_auth, subscription_level,
+    web_auth)
 from enstaller.config import Configuration, PythonConfigurationParser
 
 from .common import patched_read
@@ -240,6 +243,17 @@ class TestGetAuth(unittest.TestCase):
     def test_without_auth_or_keyring(self):
         config = Configuration()
         self.assertEqual(config.get_auth(), (None, None))
+
+    @mock.patch("enstaller.config.keyring", None)
+    def test_deprecated_get_auth(self):
+        with mkdtemp() as d:
+            f = os.path.join(d, "enstaller4rc")
+            config = Configuration()
+            config.set_auth(FAKE_USER, FAKE_PASSWORD)
+            config.write(f)
+
+            with mock.patch("enstaller.config.get_path", lambda: f):
+                self.assertEqual(get_auth(), (FAKE_USER, FAKE_PASSWORD))
 
 class TestChangeAuth(unittest.TestCase):
     @mock.patch("enstaller.config.keyring", None)
