@@ -17,6 +17,8 @@ import errno
 import string
 import datetime
 import textwrap
+import warnings
+
 from argparse import ArgumentParser
 from os.path import isfile, join
 
@@ -426,6 +428,22 @@ def update_enstaller(enpkg, opts):
     return updated
 
 
+def handle_enstaller_in_requirements(enpkg, reqs):
+    req = requirements["enstaller"]
+    if req.version is None:
+        if update_enstaller(enpkg, args):
+            print("updated enpkg.")
+            return
+        else:
+            requirements.pop("enstaller")
+            reqs = [req for req in requirements]
+    return reqs
+
+def needs_to_downgrade_enstaller(enpkg, reqs):
+    for req in reqs:
+        if req.name == "enstaller" and req.version is not None:
+            return True
+
 def main(argv=None):
     if argv is None:
         argv = sys.argv[1:]
@@ -712,6 +730,13 @@ def main(argv=None):
             reqs.append(Req(name + ' ' + version))
         else:
             reqs.append(Req(arg))
+
+    # This code assumes we have already upgraded enstaller if needed
+    if needs_to_downgrade_enstaller(enpkg, reqs):
+        warnings.warn("enstaller in requirement list: enstaller will be downgraded !")
+    else:
+        print("Enstaller is already up to date, not upgrading.")
+        reqs = [req for req in reqs if req.name != "enstaller"]
 
     if args.verbose:
         print("Requirements:")
