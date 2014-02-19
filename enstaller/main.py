@@ -35,6 +35,7 @@ from enstaller.enpkg import (Enpkg, EnpkgError, create_joined_store,
     req_from_anything, get_default_remote)
 from enstaller.resolve import Req, comparable_info
 from enstaller.egg_meta import is_valid_eggname, split_eggname
+from enstaller.errors import AuthFailedError
 
 from enstaller.store.joined import JoinedStore
 from enstaller.store.indexed import IndexedStore
@@ -629,7 +630,13 @@ def main(argv=None):
         print(PLEASE_AUTH_MESSAGE)
         sys.exit(-1)
     else:
-        authenticate(config, enpkg.remote)
+        try:
+            authenticate(config, enpkg.remote)
+        except AuthFailedError as e:
+            login, _ = config.get_auth()
+            print("Could not authenticate with user '{0}'".format(login))
+            print("You can change your authentication details with 'enpkg --userpass'")
+            sys.exit(-1)
 
     if args.dry_run:
         def print_actions(actions):
