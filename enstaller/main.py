@@ -13,7 +13,6 @@ import os
 import re
 import sys
 import site
-import traceback
 import errno
 import string
 import datetime
@@ -25,17 +24,17 @@ from enstaller import __version__ as __ENSTALLER_VERSION__
 from enstaller._version import is_released as IS_RELEASED
 from egginst.utils import bin_dir_name, rel_site_packages
 from enstaller import __version__
-from enstaller.config import (Configuration, authenticate, get_path,
-    input_auth, print_config, subscription_level, subscription_message)
+from enstaller.config import (Configuration, authenticate,
+    input_auth, prepend_url, print_config, subscription_message)
 from enstaller.proxy.api import setup_proxy
 from enstaller.utils import abs_expanduser, fill_url, exit_if_sudo_on_venv
 
 from enstaller.eggcollect import EggCollection
 from enstaller.enpkg import (Enpkg, EnpkgError, create_joined_store,
-    req_from_anything, get_default_remote)
+    req_from_anything)
 from enstaller.resolve import Req, comparable_info
 from enstaller.egg_meta import is_valid_eggname, split_eggname
-from enstaller.errors import AuthFailedError
+from enstaller.errors import AuthFailedError, InvalidConfiguration
 
 from enstaller.store.joined import JoinedStore
 from enstaller.store.indexed import IndexedStore
@@ -201,10 +200,10 @@ def search(enpkg, pat=None):
     if enpkg.config.use_webservice and not(SUBSCRIBED):
         user = {}
         try:
-            user = authenticate(config)
+            user = authenticate(enpkg.config)
         except Exception as e:
             print(e.message)
-        print(subscription_message(config, user))
+        print(subscription_message(enpkg.config, user))
 
 
 def updates_check(enpkg):
@@ -272,12 +271,12 @@ def epd_install_confirm():
     yn = raw_input("Are you sure that you wish to proceed? (y/[n]) ")
     return yn.lower() in set(['y', 'yes'])
 
-def add_url(url, verbose):
+def add_url(config, url, verbose):
     url = fill_url(url)
-    if url in config.get('IndexedRepos'):
+    if url in config.IndexedRepos:
         print("Already configured:", url)
         return
-    config.prepend_url(url)
+    prepend_url(url)
 
 def pretty_print_packages(info_list):
     packages = {}
@@ -625,7 +624,7 @@ def main(argv=None):
         sys.exit(-1)
 
     try:
-        auth = config.get_auth()
+        config.get_auth()
     except InvalidConfiguration:
         print(PLEASE_AUTH_MESSAGE)
         sys.exit(-1)
@@ -650,7 +649,7 @@ def main(argv=None):
         return
 
     if args.add_url:                              # --add-url
-        add_url(args.add_url, args.verbose)
+        add_url(enpkg.config, args.add_url, args.verbose)
         return
 
     if args.revert:                               # --revert
