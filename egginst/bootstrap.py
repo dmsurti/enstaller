@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 from os.path import isfile, join
 
@@ -18,7 +20,7 @@ def main(prefix=sys.prefix, hook=False, pkgs_dir=None, verbose=False):
     # from of sys.path
     egg_path = sys.path[0]
 
-    print "Bootstrapping:", egg_path
+    print("Bootstrapping:", egg_path)
     ei = egginst.EggInst(egg_path, prefix,
                          hook=hook, pkgs_dir=pkgs_dir, verbose=verbose)
     ei.install()
@@ -39,7 +41,7 @@ def fix_easy_pth(pth):
         for line in new_lines:
             fo.write(line + '\n')
         fo.close()
-        print "Removed enstaller entry from", pth
+        print("Removed enstaller entry from", pth)
 
 
 def remove_and_fix():
@@ -78,7 +80,7 @@ def cli():
     opts, args = p.parse_args()
 
     if opts.version:
-        print "enstaller version:", __version__
+        print("enstaller version:", __version__)
         return
 
     main(opts.prefix, opts.hook, opts.verbose)

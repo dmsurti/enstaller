@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 from os.path import dirname, isdir, join
 
@@ -19,7 +21,7 @@ def create_link(arcname, link, prefix):
 
     rm_rf(dst, verbose)
     if verbose:
-        print "Creating: %s (link to %s)" % (dst, link)
+        print("Creating: %s (link to %s)" % (dst, link))
     os.symlink(link, dst)
     return dst
 

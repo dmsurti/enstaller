@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import errno
 import sys
 import os
@@ -45,12 +47,12 @@ def rm_rf(path, verbose=False):
         # exists('/path/to/dead-link') will return False, although
         # islink('/path/to/dead-link') is True.
         if verbose:
-            print "Removing: %r (link)" % path
+            print("Removing: %r (link)" % path)
         os.unlink(path)
 
     elif isfile(path):
         if verbose:
-            print "Removing: %r (file)" % path
+            print("Removing: %r (file)" % path)
         if on_win:
             try:
                 os.unlink(path)
@@ -61,7 +63,7 @@ def rm_rf(path, verbose=False):
 
     elif isdir(path):
         if verbose:
-            print "Removing: %r (directory)" % path
+            print("Removing: %r (directory)" % path)
         if on_win:
             try:
                 shutil.rmtree(path)
