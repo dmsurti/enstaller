@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import math
 import os
 import sys
@@ -100,11 +102,11 @@ class FetchAPI(object):
             if force:
                 if md5_file(path) == info.get('md5'):
                     if self.verbose:
-                        print "Not refetching, %r MD5 match" % path
+                        print("Not refetching, %r MD5 match" % path)
                     return
             else:
                 if self.verbose:
-                    print "Not forcing refetch, %r exists" % path
+                    print("Not forcing refetch, %r exists" % path)
                 return
 
         self.fetch(egg, execution_aborted)

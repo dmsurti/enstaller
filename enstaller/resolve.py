@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import re
 from collections import defaultdict
 
@@ -203,7 +205,7 @@ class Resolve(object):
 
         can_order = self.are_complete(eggs)
         if self.verbose:
-            print "Can determine install order:", can_order
+            print("Can determine install order:", can_order)
         if can_order:
             eggs = self.determine_install_order(eggs)
         return eggs
@@ -245,9 +247,9 @@ class Resolve(object):
                 if len(ds) == 1:
                     continue
                 if self.verbose:
-                    print 'multiple: %s' % name
+                    print('multiple: %s' % name)
                     for d in ds:
-                        print '    %s' % d
+                        print('    %s' % d)
                 r = max(reqs_deep[name], key=lambda r: r.strictness)
                 assert r.name == name
                 # remove the eggs with name
@@ -272,7 +274,7 @@ class Resolve(object):
         'recur': dependencies are handled recursively (default)
         """
         if self.verbose:
-            print "Determining install sequence for %r" % req
+            print("Determining install sequence for %r" % req)
         root = self.get_egg(req)
         if root is None:
             return None

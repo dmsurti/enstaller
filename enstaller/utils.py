@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import sys
 import hashlib
 from os.path import abspath, expanduser, getmtime, getsize, isdir, isfile, join
@@ -157,8 +159,8 @@ def exit_if_sudo_on_venv(prefix):
     if os.getuid() != 0:
         return
 
-    print 'You are running enpkg as a root user inside a virtual environment. ' \
-          'Please run it as a normal user'
+    print('You are running enpkg as a root user inside a virtual environment. ' \
+          'Please run it as a normal user')
 
     sys.exit(1)
 

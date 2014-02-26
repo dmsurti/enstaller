@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import sys
 import re
@@ -197,7 +199,7 @@ def update_index(dir_path, force=False, verbose=False):
     """
     txt_path = join(dir_path, 'index-depend.txt')
     if verbose:
-        print "Updating:", txt_path
+        print("Updating:", txt_path)
 
     if force or not isfile(txt_path):
         section = {}
@@ -211,7 +213,7 @@ def update_index(dir_path, force=False, verbose=False):
         if not fn.endswith('.egg'):
             continue
         if not is_valid_eggname(fn):
-            print "WARNING: ignoring invalid egg name:", fn
+            print("WARNING: ignoring invalid egg name:", fn)
             continue
         path = join(dir_path, fn)
         if fn in section:
@@ -226,7 +228,7 @@ def update_index(dir_path, force=False, verbose=False):
             sys.stdout.flush()
 
     if verbose:
-        print
+        print()
     write_txt_bz2(txt_path, faux.getvalue())
     faux.close()
 

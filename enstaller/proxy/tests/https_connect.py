@@ -7,7 +7,7 @@
 # redistributed only under the conditions described in the aforementioned
 # license.
 #------------------------------------------------------------------------------
-
+from __future__ import print_function
 
 import urllib2
 
@@ -28,13 +28,13 @@ if __name__ == '__main__':
 
     # Try an HTTPS request
     f = urllib2.urlopen(r"https://svn.enthought.com/svn/enthought")
-    print f.read()
+    print(f.read())
     f.close()
-    print "\n\n"
+    print("\n\n")
 
     # Try an HTTP request
     f = urllib2.urlopen(r"http://code.enthought.com/enstaller/eggs")
-    print f.read()
+    print(f.read())
     f.close()
-    print "\n\n"
+    print("\n\n")
 

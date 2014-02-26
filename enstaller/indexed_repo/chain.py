@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import os
 import sys
 import hashlib
@@ -23,7 +25,7 @@ def stream_to_file(fi, path, info={}):
     size = info['size']
     md5 = info.get('md5')
 
-    print "Fetching: %s (%s)" % (basename(path), human_bytes(size))
+    print("Fetching: %s (%s)" % (basename(path), human_bytes(size)))
 
     n = 0
     h = hashlib.new('md5')
@@ -68,10 +70,10 @@ class Chain(object):
 
 
     def print_repos(self):
-        print 'Repositories:'
+        print('Repositories:')
         for r in self.repos:
-            print '  %r' % r
-        print
+            print('  %r' % r)
+        print()
 
 
     def connect(self, repo):
@@ -100,8 +102,8 @@ class Chain(object):
         parse it and update the index.
         """
         if self.verbose:
-            print "Adding repository:"
-            print "   URL:", repo
+            print("Adding repository:")
+            print("   URL:", repo)
 
         repo = dist_naming.cleanup_reponame(repo)
         self.repos.append(repo)
@@ -253,7 +255,7 @@ class Chain(object):
 
         can_order = self.are_complete(dists)
         if self.verbose:
-            print "Can determine install order:", can_order
+            print("Can determine install order:", can_order)
         if can_order:
             dists = self.determine_install_order(dists)
         return dists
@@ -289,9 +291,9 @@ class Chain(object):
                 if len(ds) == 1:
                     continue
                 if self.verbose:
-                    print 'multiple: %s' % cname
+                    print('multiple: %s' % cname)
                     for d in ds:
-                        print '    %s' % d
+                        print('    %s' % d)
                 r = max(reqs_deep[cname], key=lambda r: r.strictness)
                 assert r.name == cname
                 # remove the dists with name 'cname'
@@ -316,7 +318,7 @@ class Chain(object):
         'recur': dependencies are handled recursively (default)
         """
         if self.verbose:
-            print "Determining install sequence for %r" % req
+            print("Determining install sequence for %r" % req)
         root = self.get_dist(req)
         if root is None:
             return None
@@ -367,15 +369,15 @@ class Chain(object):
         # only see if the file exists
         if isfile(path) and (not force or md5_file(path) == info.get('md5')):
             if self.verbose:
-                print "Not forcing refetch, %r already matches MD5" % path
+                print("Not forcing refetch, %r already matches MD5" % path)
             return
 
         if dry_run:
             return
 
         if self.verbose:
-            print "Fetching: %r" % dist
-            print "      to: %r" % path
+            print("Fetching: %r" % dist)
+            print("      to: %r" % path)
 
         stream_to_file(self.repo_objs[repo].get_data(fn), path, info)
 
@@ -389,7 +391,7 @@ class Chain(object):
         assert filename == basename(filename), filename
         dist = repo + filename
         if self.verbose:
-            print "Adding %r to index" % dist
+            print("Adding %r to index" % dist)
 
         arcname = 'EGG-INFO/spec/depend'
         z = zipfile.ZipFile(join(dist_naming.dirname_repo(repo), filename))
@@ -416,7 +418,7 @@ class Chain(object):
             if not fn.endswith('.egg'):
                 continue
             if not dist_naming.is_valid_eggname(fn):
-                print "WARNING: ignoring invalid egg name:", join(dir_path, fn)
+                print("WARNING: ignoring invalid egg name:", join(dir_path, fn))
                 continue
             self.index_file(fn, repo)
 

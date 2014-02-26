@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 import ntpath
 import sys
 import warnings
@@ -61,11 +63,11 @@ def get_writable_local_dir(config):
         return local_dir
 
     import tempfile
-    print ('Warning: Python prefix directory is not writeable '
-           'with current permissions:\n'
-           '    %s\n'
-           'Using a temporary cache for index and eggs.\n' %
-           config.prefix)
+    print('Warning: Python prefix directory is not writeable '
+          'with current permissions:\n'
+          '    %s\n'
+          'Using a temporary cache for index and eggs.\n' %
+          config.prefix)
     return tempfile.mkdtemp()
 
 
@@ -207,9 +209,9 @@ class Enpkg(object):
         *_actions methods below.
         """
         if self.verbose:
-            print "Enpkg.execute:", len(actions)
+            print("Enpkg.execute:", len(actions))
             for item in actions:
-                print '\t' + str(item)
+                print('\t' + str(item))
 
         if len(actions) == 0:
             return
