@@ -45,7 +45,8 @@ def mock_print():
         yield m
 
 class MetaOnlyEggCollection(AbstractEggCollection):
-    def __init__(self, entries):
+    def __init__(self, prefix, entries):
+        self.prefix = prefix
         self.entries = entries
         self._egg_name_to_entry = dict((entry["key"], entry) for entry in entries)
 

@@ -30,7 +30,7 @@ from enstaller.enpkg import Enpkg
 from enstaller.eggcollect import EggCollection, JoinedEggCollection
 from enstaller.errors import InvalidPythonPathConfiguration
 from enstaller.main import check_prefixes, disp_store_info, \
-    epd_install_confirm, get_package_path, info_option, \
+    epd_install_confirm, get_package_path, imports_option, info_option, \
     install_req, install_time_string, main, name_egg, print_installed, search, \
     update_all, updates_check, update_enstaller, whats_new
 from enstaller.store.tests.common import MetadataOnlyStore
@@ -197,6 +197,35 @@ class TestMisc(unittest.TestCase):
                              "Expected to find {0} in PYTHONPATH". \
                              format(site_packages[0]))
 
+    def test_imports_option_empty(self):
+        r_output = textwrap.dedent("""\
+            Name                 Version              Location
+            ============================================================
+            """)
+        config = Configuration._get_default_config()
+        enpkg = _create_prefix_with_eggs(config, config.prefix)
+
+        with mock_print() as m:
+            imports_option(enpkg)
+        self.assertMultiLineEqual(m.value, r_output)
+
+    def test_imports_option_sys_only(self):
+        r_output = textwrap.dedent("""\
+            Name                 Version              Location
+            ============================================================
+            dummy                1.0.1-1              sys
+            """)
+        from enstaller.main import imports_option
+        config = Configuration._get_default_config()
+
+        installed_entries = [dummy_installed_egg_factory("dummy", "1.0.1", 1)]
+        enpkg = _create_prefix_with_eggs(config, config.prefix,
+                installed_entries)
+
+        with mock_print() as m:
+            imports_option(enpkg)
+        self.assertMultiLineEqual(m.value, r_output)
+
 def _create_prefix_with_eggs(config, prefix, installed_entries=None, remote_entries=None):
     if remote_entries is None:
         remote_entries = []
@@ -209,7 +238,7 @@ def _create_prefix_with_eggs(config, prefix, installed_entries=None, remote_entr
     enpkg = Enpkg(repo, prefixes=[prefix], hook=None,
                   evt_mgr=None, verbose=False, config=config)
     enpkg.ec = JoinedEggCollection([
-        MetaOnlyEggCollection(installed_entries)])
+        MetaOnlyEggCollection(prefix, installed_entries)])
     return enpkg
 
 class TestInfoStrings(unittest.TestCase):
