@@ -40,28 +40,6 @@ from .common import MetaOnlyEggCollection, dummy_enpkg_entry_factory, \
     is_not_authenticated, is_authenticated, \
     PY_VER
 
-class TestEnstallerMainActions(unittest.TestCase):
-    def test_print_version(self):
-        # XXX: this is lousy test: we'd like to at least ensure we're printing
-        # the correct version, but capturing the stdout is a bit tricky. Once
-        # we replace print by proper logging, we should be able to do better.
-        try:
-            main(["--version"])
-        except SystemExit as e:
-            self.assertEqual(e.code, 0)
-
-    def test_help_runs_and_exits_correctly(self):
-        try:
-            main(["--help"])
-        except SystemExit as e:
-            self.assertEqual(e.code, 0)
-
-    def test_print_env(self):
-        try:
-            main(["--env"])
-        except SystemExit as e:
-            self.assertEqual(e.code, 0)
-
 class TestEnstallerUpdate(unittest.TestCase):
     def test_no_update_enstaller(self):
         config = Configuration()
@@ -202,7 +180,7 @@ class TestMisc(unittest.TestCase):
             Name                 Version              Location
             ============================================================
             """)
-        config = Configuration._get_default_config()
+        config = Configuration()
         enpkg = _create_prefix_with_eggs(config, config.prefix)
 
         with mock_print() as m:
@@ -216,7 +194,7 @@ class TestMisc(unittest.TestCase):
             dummy                1.0.1-1              sys
             """)
         from enstaller.main import imports_option
-        config = Configuration._get_default_config()
+        config = Configuration()
 
         installed_entries = [dummy_installed_egg_factory("dummy", "1.0.1", 1)]
         enpkg = _create_prefix_with_eggs(config, config.prefix,

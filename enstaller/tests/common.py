@@ -1,4 +1,5 @@
 import contextlib
+import tempfile
 import time
 
 from cStringIO import StringIO
@@ -84,6 +85,19 @@ def make_keyring_unavailable(f):
 
 def without_default_configuration(f):
     return mock.patch("enstaller.config.get_path", lambda: None)(f)
+
+def with_default_configuration(f):
+    from enstaller.config import Configuration
+    class MyConfiguration(Configuration):
+        @classmethod
+        def _get_default_config(cls, create_if_not_exists=False):
+            return cls()
+    return mock.patch("enstaller.main.Configuration", MyConfiguration)(f)
+
+def use_temporary_config_location(f):
+    fp = tempfile.NamedTemporaryFile(delete=False)
+    filename = fp.name
+    return mock.patch("enstaller.config.Configuration._default_filename", lambda self: filename)(f)
 
 def fail_authenticate(f):
     m = mock.Mock(side_effect=AuthFailedError())

@@ -14,13 +14,14 @@ from enstaller.config import _encode_auth
 
 from enstaller.tests.common import (
     without_default_configuration, mock_print, make_default_configuration_path,
-    fail_authenticate, mock_input_auth)
+    fail_authenticate, mock_input_auth, use_temporary_config_location)
 
 FAKE_USER = "nono"
 FAKE_PASSWORD = "le petit robot"
 FAKE_CREDS = _encode_auth(FAKE_USER, FAKE_PASSWORD)
 
 class TestAuth(unittest.TestCase):
+    @use_temporary_config_location
     @without_default_configuration
     def test_auth_requested_without_config(self):
         """
@@ -33,6 +34,7 @@ class TestAuth(unittest.TestCase):
         self.assertEqual(m.value, "No authentication configured, required "
                                   "to continue.To login, type 'enpkg --userpass'.\n")
 
+    @use_temporary_config_location
     @without_default_configuration
     def test_userpass_without_config(self):
         """
