@@ -46,7 +46,7 @@ def from_yaml(filename_or_fp):
     assert isinstance(filename_or_fp, basestring), \
             "Parsing frome file object not supported yet"
 
-    accepted_keys = {"store": _translate_store,
+    accepted_keys = {"store_url": _translate_store,
                      "username": _translate_username,
                      "eggs_cache": _translate_repository_cache,
                      "http_proxies": _translate_http_proxy}
