@@ -695,6 +695,8 @@ def print_config(config, remote, prefix):
     print("platform:", platform.platform())
     print("architecture:", platform.architecture()[0])
     print("use_webservice:", config.use_webservice)
+    if config.use_webservice:
+        print("store entry point:", config.webservice_entry_point)
     if config.filename is not None:
         print("config file:", config.filename)
     print("keyring backend: %s" % (_keyring_backend_name(),))
