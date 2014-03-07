@@ -702,6 +702,8 @@ def main(argv=None):
         return
 
     if args.userpass:                             # --userpass
+        if use_canopy_hack():
+            raise InvalidConfiguration("--userpass in canopyr not yet supported.")
         n_trials = 3
         for i in range(n_trials):
             username, password = input_auth()
@@ -742,7 +744,8 @@ def main(argv=None):
             print("You can change your authentication details with 'enpkg --userpass'")
             sys.exit(-1)
         else:
-            convert_auth_if_required(config_filename)
+            if not use_canopy_hack():
+                convert_auth_if_required(config_filename)
 
     if args.dry_run:
         def print_actions(actions):
