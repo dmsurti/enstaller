@@ -3,9 +3,12 @@ This is temporary.
 
 DO NOT USE IF YOU DON'T UNDERSTAND WHY STUFF IS HERE !
 """
+import ast
+import os.path
+import sys
 import warnings
 
-from enstaller.config import Configuration
+from enstaller.config import Configuration, _get_password
 from enstaller.errors import InvalidConfiguration
 from enstaller.plat import custom_plat
 from enstaller.vendor import yaml
@@ -60,4 +63,24 @@ def from_yaml(filename_or_fp):
         else:
             warnings.warn("Unknown setting '{0}', ignoring".format(yaml_name))
 
+    if config._username is not None:
+        config._password = _get_password(config._username)
+    config._filename = filename_or_fp
     return config
+
+
+def canopy_hack_path():
+    return os.path.join(sys.prefix, ".CANOPYR_HACK")
+
+
+def use_canopy_hack():
+    return os.path.isfile(canopy_hack_path())
+
+
+def canopy_hack_content():
+    with open(canopy_hack_path()) as fp:
+        path = ast.literal_eval(fp.read())
+        if not isinstance(path, str):
+            raise ValueError("Unexpected content in '{0}'".format(canopy_hack_path()))
+        else:
+            return path

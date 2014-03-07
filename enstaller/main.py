@@ -570,11 +570,19 @@ def main(argv=None):
 
     args = p.parse_args(argv)
 
-    config_filename = get_config_filename(args.sys_config)
-    if not os.path.isfile(config_filename):
-        write_default_config(config_filename)
+    # XXX: temporary until canopy hack is removed
+    from enstaller._yaml_config import (from_yaml, use_canopy_hack,
+        canopy_hack_content)
 
-    config = Configuration.from_file(config_filename)
+    if use_canopy_hack():
+        config_filename = canopy_hack_content()
+        config = from_yaml(config_filename)
+    else:
+        config_filename = get_config_filename(args.sys_config)
+        if not os.path.isfile(config_filename):
+            write_default_config(config_filename)
+
+        config = Configuration.from_file(config_filename)
 
     # Check for incompatible actions and options
     # Action options which take no package name pattern:
